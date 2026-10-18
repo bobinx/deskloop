@@ -1,0 +1,72 @@
+# Contributing to deskloop
+
+Thank you for your interest in contributing to deskloop.
+
+## Development setup
+
+### Prerequisites
+
+- macOS 13.0 or later
+- Swift 5.9 or later (included with Xcode 15+ or Command Line Tools)
+
+### Building and testing
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/deskloop.git
+cd deskloop
+
+# Build debug binary
+swift build
+
+# Run unit tests
+swift test
+
+# Build optimized release binary
+swift build -c release
+```
+
+## Project architecture
+
+The repository is structured into two targets:
+
+- `Sources/DeskloopCore/`: Core library containing playback engine (`WallpaperEngine`), download delegate (`FileDownloader`), static keyframe extraction (`StaticWallpaperService`), and source protocols (`WallpaperSource`).
+- `Sources/deskloop/`: Thin command-line interface executable that handles argument parsing, terminal output, and process daemonization.
+- `Tests/DeskloopTests/`: Unit tests for utilities, serialization, and source protocols.
+
+## Adding a new wallpaper source
+
+All wallpaper providers implement the `WallpaperSource` protocol:
+
+```swift
+public protocol WallpaperSource: Sendable {
+    var name: String { get }
+    var description: String { get }
+
+    func fetchFeatured(limit: Int) async throws -> [WallpaperItem]
+    func search(query: String) async throws -> [WallpaperItem]
+    func resolve(id: String) async throws -> WallpaperItem?
+}
+```
+
+New sources should:
+1. Stream or cache playable `.mp4` or `.mov` loops directly.
+2. Avoid fragile third-party scrapers or unauthenticated endpoints that break without notice.
+3. Be non-blocking and concurrency-safe (`Sendable`).
+4. Register the new source in `Sources/deskloop/main.swift` under `getRegisteredSources()`.
+
+## Human and AI-authored contributions
+
+Both human-crafted and AI-assisted contributions are welcome, provided they meet our quality bar:
+
+- **Verification over self-reporting**: Run `swift test` and test real wallpaper playback before opening a PR. Do not submit unverified code.
+- **Maintain power invariants**: Never disable occlusion detection or sleep tracking. `preventsDisplaySleepDuringVideoPlayback` must remain `false`.
+- **Zero third-party dependencies**: Do not introduce CocoaPods, Carthage, or third-party SwiftPM dependencies. Keep the binary lightweight and self-contained.
+- **Clean diffs**: Avoid stylistic churn, unsolicited reformatting, or AI-tell commentary. Keep changes focused.
+
+## Pull request checklist
+
+- [ ] `swift test` passes with zero failures.
+- [ ] `swift build -c release` succeeds without warnings.
+- [ ] Added or updated unit tests for new logic.
+- [ ] Documentation updated in `README.md` if CLI flags or options changed.

@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build Universal Binary & Publish Release
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build arm64
+        run: swift build -c release --triple arm64-apple-macosx
+
+      - name: Build x86_64
+        run: swift build -c release --triple x86_64-apple-macosx
+
+      - name: Create Universal Binary
+        run: |
+          mkdir -p dist
+          lipo -create \
+            .build/arm64-apple-macosx/release/deskloop \
+            .build/x86_64-apple-macosx/release/deskloop \
+            -output dist/deskloop
+          chmod +x dist/deskloop
+          cd dist
+          tar -czf deskloop-${{ github.ref_name }}-macos-universal.tar.gz deskloop
+          shasum -a 256 deskloop-${{ github.ref_name }}-macos-universal.tar.gz > deskloop-${{ github.ref_name }}-macos-universal.tar.gz.sha256
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/deskloop-*.tar.gz
+            dist/deskloop-*.sha256
+          generate_release_notes: true
