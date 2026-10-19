@@ -55,40 +55,6 @@ func getRegisteredSources() -> [String: WallpaperSource] {
     ]
 }
 
-func parseCommandLineArgs(_ args: [String]) -> (source: WallpaperSource?, cleanArgs: [String], error: String?) {
-    let sources = getRegisteredSources()
-    var filtered: [String] = []
-    var chosenName: String? = nil
-
-    var skipNext = false
-    for (i, arg) in args.enumerated() {
-        if skipNext {
-            skipNext = false
-            continue
-        }
-        if arg == "--source" {
-            if i + 1 < args.count {
-                chosenName = args[i + 1].lowercased()
-                skipNext = true
-            } else {
-                return (nil, [], "Missing argument for --source.")
-            }
-        } else {
-            filtered.append(arg)
-        }
-    }
-
-    if let name = chosenName {
-        guard let source = sources[name] else {
-            let available = sources.keys.sorted().joined(separator: ", ")
-            return (nil, [], "Unknown source '\(name)'. Available sources: \(available).")
-        }
-        return (source, filtered, nil)
-    }
-
-    return (sources["apple"]!, filtered, nil)
-}
-
 func formatTable(_ rows: [[String]], headers: [String]) {
     var colWidths = headers.map { $0.count }
     for row in rows {
@@ -134,14 +100,6 @@ func runAsync<T>(_ block: @escaping () async throws -> T) throws -> T {
     }
 }
 
-func formatBytes(_ bytes: Int64) -> String {
-    return Utilities.formatBytes(bytes)
-}
-
-func sanitizeFilename(_ input: String) -> String {
-    return Utilities.sanitizeFilename(input)
-}
-
 func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
     let expanded = NSString(string: target).expandingTildeInPath
     if FileManager.default.fileExists(atPath: expanded) {
@@ -155,10 +113,10 @@ func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
         return url
     }
 
-    let cacheDir = WallpaperEngine.appDir.appendingPathComponent("cache", isDirectory: true)
+    let cacheDir = EngineProcessController.appDirectory.appendingPathComponent("cache", isDirectory: true)
     try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
 
-    let safeTarget = sanitizeFilename(target)
+    let safeTarget = Utilities.sanitizeFilename(target)
     let cacheFileName = "\(source.name)_\(safeTarget).mp4"
     let localCache = cacheDir.appendingPathComponent(cacheFileName)
 
@@ -198,48 +156,28 @@ func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
     return localCache
 }
 
-let rawArgs = CommandLine.arguments
-
-guard rawArgs.count > 1 else {
-    printUsage()
-    exit(0)
-}
-
-let firstArg = rawArgs[1].lowercased()
-if firstArg == "-h" || firstArg == "--help" || firstArg == "help" {
-    printUsage()
-    exit(0)
-}
-
-if firstArg == "-v" || firstArg == "--version" || firstArg == "version" {
-    print("deskloop version \(deskloopVersion)")
-    exit(0)
-}
-
-let (parsedSource, cleanArgs, parseError) = parseCommandLineArgs(rawArgs)
-if let err = parseError {
-    print("\u{001B}[31mError:\u{001B}[0m \(err)")
-    exit(1)
-}
-
-guard let source = parsedSource, cleanArgs.count > 1 else {
-    printUsage()
-    exit(0)
-}
-
-let command = cleanArgs[1].lowercased()
-
+let sources = getRegisteredSources()
 do {
+    let command = try CLICommandParser.parse(
+        Array(CommandLine.arguments.dropFirst()),
+        sources: sources
+    )
     switch command {
-    case "sources":
+    case .help:
+        printUsage()
+        exit(0)
+    case .version:
+        print("deskloop version \(deskloopVersion)")
+        exit(0)
+    case .sources:
         let all = getRegisteredSources()
         let rows = all.values.sorted(by: { $0.name < $1.name }).map { [$0.name, $0.description] }
         print("\n\u{001B}[1;32mAvailable Wallpaper Sources:\u{001B}[0m")
         formatTable(rows, headers: ["Source Name", "Description"])
         exit(0)
 
-    case "featured", "trending", "list":
-        let limit = cleanArgs.count > 2 ? Int(cleanArgs[2]) ?? 15 : 15
+    case let .featured(sourceName, limit):
+        let source = sourceName
         let items = try runAsync { try await source.fetchFeatured(limit: limit) }
         let rows = items.map { [
             $0.id,
@@ -252,12 +190,8 @@ do {
         formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
         exit(0)
 
-    case "search":
-        guard cleanArgs.count > 2 else {
-            print("\u{001B}[31mError:\u{001B}[0m Missing search query. Usage: deskloop search <query> [--source apple|local]")
-            exit(1)
-        }
-        let query = cleanArgs[2...].joined(separator: " ")
+    case let .search(sourceName, query):
+        let source = sourceName
         print("Searching [\(source.name)] for: \"\(query)\"...")
         let results = try runAsync { try await source.search(query: query) }
         if results.isEmpty {
@@ -275,19 +209,8 @@ do {
         formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
         exit(0)
 
-    case "download":
-        guard cleanArgs.count > 2 else {
-            print("\u{001B}[31mError:\u{001B}[0m Missing ID. Usage: deskloop download <id> [-o output.mp4] [--source ...]")
-            exit(1)
-        }
-        let targetId = cleanArgs[2]
-        var outputPath = "wallpaper_\(sanitizeFilename(targetId)).mp4"
-        if cleanArgs.count >= 5 && cleanArgs[3] == "-o" {
-            outputPath = cleanArgs[4]
-        } else if cleanArgs.count >= 4 && !cleanArgs[3].starts(with: "-") {
-            outputPath = cleanArgs[3]
-        }
-
+    case let .download(sourceName, targetId, outputPath):
+        let source = sourceName
         print("Resolving '\(targetId)' from source [\(source.name)]...")
         guard let item = try runAsync({ try await source.resolve(id: targetId) }) else {
             print("\u{001B}[31mError:\u{001B}[0m Wallpaper '\(targetId)' not found in source '\(source.name)'.")
@@ -309,14 +232,8 @@ do {
         print("\n\u{001B}[32mSaved to:\u{001B}[0m \(destinationURL.path)")
         exit(0)
 
-    case "apply", "live":
-        guard cleanArgs.count > 2 else {
-            print("\u{001B}[31mError:\u{001B}[0m Missing ID, URL, or video path. Usage: deskloop apply <id|path|url> [--daemon] [--source ...]")
-            exit(1)
-        }
-        let target = cleanArgs[2]
-        let isDaemon = cleanArgs.contains("--daemon")
-
+    case let .apply(sourceName, target, isDaemon):
+        let source = sourceName
         let videoURL = try resolveVideoURL(target: target, source: source)
 
         if isDaemon {
@@ -327,41 +244,55 @@ do {
                 executablePath = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
             }
 
-            let logFile = WallpaperEngine.logFileURL
+            let logFile = EngineProcessController.logFileURL
             FileManager.default.createFile(atPath: logFile.path, contents: nil)
             let logHandle = try FileHandle(forWritingTo: logFile)
 
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = ["apply", videoURL.path]
+            process.arguments = ["apply", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
             process.standardOutput = logHandle
             process.standardError = logHandle
             try process.run()
 
             print("\u{001B}[32mStarted live wallpaper daemon (PID: \(process.processIdentifier))\u{001B}[0m")
-            print("Video: \(videoURL.path)")
+            print("Video: \(videoURL.isFileURL ? videoURL.path : videoURL.absoluteString)")
             print("Logs: \(logFile.path)")
             print("Run \u{001B}[1mdeskloop status\u{001B}[0m or \u{001B}[1mdeskloop stop\u{001B}[0m to manage.")
             exit(0)
         } else {
             print("\u{001B}[32mStarting live video wallpaper on all connected displays...\u{001B}[0m")
-            print("Video: \(videoURL.path)")
+            print("Video: \(videoURL.isFileURL ? videoURL.path : videoURL.absoluteString)")
             print("Power management active: occlusion auto-pause, low power mode awareness, display sleep hooks.")
             print("Press \u{001B}[1mCtrl+C\u{001B}[0m to stop.")
 
+            let engineLease = try EngineProcessController.acquireEngineLease()
+            try EngineProcessController.saveState(videoURL: videoURL)
+            let signalHandler = ApplicationSignalHandler {
+                WallpaperEngine.shared.stop()
+                do {
+                    try EngineProcessController.clearState(ownedBy: getpid())
+                } catch {
+                    fputs("deskloop: failed to clear engine state: \(error.localizedDescription)\n", stderr)
+                }
+                NSApplication.shared.terminate(nil)
+            }
+            _ = signalHandler
             WallpaperEngine.shared.start(with: videoURL)
-            NSApplication.shared.run()
+            withExtendedLifetime((signalHandler, engineLease)) {
+                NSApplication.shared.run()
+            }
         }
 
-    case "status":
-        guard let state = WallpaperEngine.loadState() else {
+    case .status:
+        guard let state = try EngineProcessController.loadState() else {
             print("Status: \u{001B}[33mStopped\u{001B}[0m (No live wallpaper engine running)")
             exit(0)
         }
 
-        let isRunning = WallpaperEngine.isProcessRunning(pid: state.pid)
+        let isRunning = EngineProcessController.isRunning(state)
         if !isRunning {
-            WallpaperEngine.clearState()
+            try EngineProcessController.clearState(ownedBy: state.pid)
             print("Status: \u{001B}[33mStopped\u{001B}[0m (Cleaned up stale process record PID \(state.pid))")
             exit(0)
         }
@@ -377,12 +308,12 @@ do {
         Active Video:    \(state.videoPath)
         Started:         \(uptimeString)
         Active Displays: \(screenCount) connected display\(screenCount == 1 ? "" : "s")
-        Log File:        \(WallpaperEngine.logFileURL.path)
+        Log File:        \(EngineProcessController.logFileURL.path)
         """)
         exit(0)
 
-    case "stop":
-        let result = WallpaperEngine.stopRunningEngine()
+    case .stop:
+        let result = try EngineProcessController.stopRunningEngine()
         if result.success {
             print("\u{001B}[32m\(result.message)\u{001B}[0m")
         } else {
@@ -390,12 +321,8 @@ do {
         }
         exit(0)
 
-    case "set-static":
-        guard cleanArgs.count > 2 else {
-            print("\u{001B}[31mError:\u{001B}[0m Missing ID, URL, or video path. Usage: deskloop set-static <id|path|url> [--source ...]")
-            exit(1)
-        }
-        let target = cleanArgs[2]
+    case let .setStatic(sourceName, target):
+        let source = sourceName
         let fileURL = try resolveVideoURL(target: target, source: source)
 
         print("Setting static wallpaper for all displays...")
@@ -403,12 +330,11 @@ do {
         print("\u{001B}[32mSuccessfully updated desktop wallpaper.\u{001B}[0m")
         exit(0)
 
-    case "cache":
-        let cacheDir = WallpaperEngine.appDir.appendingPathComponent("cache", isDirectory: true)
-        let subaction = cleanArgs.count > 2 ? cleanArgs[2].lowercased() : "list"
+    case let .cache(action):
+        let cacheDir = EngineProcessController.appDirectory.appendingPathComponent("cache", isDirectory: true)
 
-        switch subaction {
-        case "clear", "clean", "purge":
+        switch action {
+        case .clear:
             guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey]) else {
                 print("Cache directory is empty.")
                 exit(0)
@@ -423,10 +349,10 @@ do {
                 try? FileManager.default.removeItem(at: file)
                 deletedCount += 1
             }
-            print("\u{001B}[32mCleared \(deletedCount) cached video\(deletedCount == 1 ? "" : "s") (\(formatBytes(freedBytes)) freed).\u{001B}[0m")
+            print("\u{001B}[32mCleared \(deletedCount) cached video\(deletedCount == 1 ? "" : "s") (\(Utilities.formatBytes(freedBytes)) freed).\u{001B}[0m")
             exit(0)
 
-        case "list", "ls":
+        case .list:
             guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else {
                 print("Cache is empty.")
                 exit(0)
@@ -442,24 +368,16 @@ do {
             for file in videoFiles {
                 let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 totalBytes += Int64(size)
-                rows.append([file.lastPathComponent, formatBytes(Int64(size))])
+                rows.append([file.lastPathComponent, Utilities.formatBytes(Int64(size))])
             }
 
             print("\n\u{001B}[1;32mCached Video Wallpapers (\(cacheDir.path)):\u{001B}[0m")
             formatTable(rows, headers: ["File Name", "Size"])
-            print("\nTotal disk usage: \u{001B}[1m\(formatBytes(totalBytes))\u{001B}[0m across \(videoFiles.count) file\(videoFiles.count == 1 ? "" : "s").")
+            print("\nTotal disk usage: \u{001B}[1m\(Utilities.formatBytes(totalBytes))\u{001B}[0m across \(videoFiles.count) file\(videoFiles.count == 1 ? "" : "s").")
             print("Run \u{001B}[1mdeskloop cache clear\u{001B}[0m to free up space.")
             exit(0)
 
-        default:
-            print("\u{001B}[31mUnknown cache command:\u{001B}[0m \(subaction). Available options: list, clear")
-            exit(1)
         }
-
-    default:
-        print("\u{001B}[31mUnknown command:\u{001B}[0m \(command)\n")
-        printUsage()
-        exit(1)
     }
 } catch {
     print("\u{001B}[31mError:\u{001B}[0m \(error.localizedDescription)")

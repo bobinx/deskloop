@@ -51,30 +51,43 @@ public final class AppleAerialSource: WallpaperSource, Sendable {
         }
 
         // Download Apple resources-16.tar and unpack entries.json
-        let tarTemp = cacheDir.appendingPathComponent("resources.tar")
+        let tarTemp = cacheDir.appendingPathComponent("resources-\(UUID().uuidString).tar")
         do {
             let (data, response) = try await URLSession.shared.data(from: tarURL)
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                try data.write(to: tarTemp)
-
-                let tarProcess = Process()
-                tarProcess.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-                tarProcess.arguments = ["-xf", tarTemp.path, "-C", cacheDir.path, "entries.json"]
-                try tarProcess.run()
-                tarProcess.waitUntilExit()
-
-                try? FileManager.default.removeItem(at: tarTemp)
-
-                let extractedFile = cacheDir.appendingPathComponent("entries.json")
-                if FileManager.default.fileExists(atPath: extractedFile.path) {
-                    try? FileManager.default.removeItem(at: cacheFile)
-                    try FileManager.default.moveItem(at: extractedFile, to: cacheFile)
-                }
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
             }
+            try data.write(to: tarTemp, options: .atomic)
+
+            let tarProcess = Process()
+            tarProcess.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+            tarProcess.arguments = ["-xf", tarTemp.path, "-C", cacheDir.path, "entries.json"]
+            try tarProcess.run()
+            tarProcess.waitUntilExit()
+
+            guard tarProcess.terminationStatus == 0 else {
+                throw URLError(.cannotDecodeContentData)
+            }
+
+            try? FileManager.default.removeItem(at: tarTemp)
+
+            let extractedFile = cacheDir.appendingPathComponent("entries.json")
+            guard FileManager.default.fileExists(atPath: extractedFile.path) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            if FileManager.default.fileExists(atPath: cacheFile.path) {
+                try FileManager.default.removeItem(at: cacheFile)
+            }
+            try FileManager.default.moveItem(at: extractedFile, to: cacheFile)
         } catch {
+            try? FileManager.default.removeItem(at: tarTemp)
             // Fall back to direct 2x entries.json if tar fetch fails
-            let (data, _) = try await URLSession.shared.data(from: fallbackJSONURL)
-            try? data.write(to: cacheFile)
+            let (data, response) = try await URLSession.shared.data(from: fallbackJSONURL)
+            guard let http = response as? HTTPURLResponse, (1...299).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            try data.write(to: cacheFile, options: .atomic)
         }
 
         guard let validData = try? Data(contentsOf: cacheFile) else {

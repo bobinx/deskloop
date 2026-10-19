@@ -26,12 +26,6 @@ final class VideoPlayerHostView: NSView {
     }
 }
 
-public struct EngineState: Codable, Sendable {
-    public let pid: Int32
-    public let videoPath: String
-    public let startTime: Date
-}
-
 public final class WallpaperEngine: NSObject {
     public static let shared = WallpaperEngine()
 
@@ -54,110 +48,30 @@ public final class WallpaperEngine: NSObject {
     private var entries: [ScreenEntry] = []
     private var videoURL: URL?
     private var systemObservers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
 
     // Power management state
     private var isPowerSuspended: Bool = false
     private var isSystemSleeping: Bool = false
 
-    public static let appDir: URL = {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let dir = home.appendingPathComponent(".deskloop", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
-
-    public static let stateFileURL: URL = {
-        return appDir.appendingPathComponent("live.json")
-    }()
-
-    public static let pidFileURL: URL = {
-        return appDir.appendingPathComponent("live.pid")
-    }()
-
-    public static let logFileURL: URL = {
-        return appDir.appendingPathComponent("live.log")
-    }()
-
-    public static func saveState(videoPath: String) {
-        let pid = getpid()
-        let state = EngineState(pid: pid, videoPath: videoPath, startTime: Date())
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: stateFileURL)
-        }
-        try? String(pid).write(to: pidFileURL, atomically: true, encoding: .utf8)
-    }
-
-    public static func loadState() -> EngineState? {
-        guard let data = try? Data(contentsOf: stateFileURL),
-              let state = try? JSONDecoder().decode(EngineState.self, from: data) else {
-            // Fallback to legacy PID file if json not present
-            if let pidStr = try? String(contentsOf: pidFileURL, encoding: .utf8),
-               let pid = Int32(pidStr.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                return EngineState(pid: pid, videoPath: "Unknown", startTime: Date())
-            }
-            return nil
-        }
-        return state
-    }
-
-    public static func clearState() {
-        try? FileManager.default.removeItem(at: stateFileURL)
-        try? FileManager.default.removeItem(at: pidFileURL)
-    }
-
-    public static func isProcessRunning(pid: Int32) -> Bool {
-        return kill(pid, 0) == 0
-    }
-
-    public static func stopRunningEngine() -> (success: Bool, message: String) {
-        guard let state = loadState() else {
-            return (false, "No running live wallpaper engine recorded.")
-        }
-
-        guard isProcessRunning(pid: state.pid) else {
-            clearState()
-            return (false, "Cleaned up stale process record (PID: \(state.pid) was not running).")
-        }
-
-        kill(state.pid, SIGTERM)
-        // Wait up to 500ms for graceful shutdown
-        for _ in 0..<5 {
-            usleep(100_000)
-            if !isProcessRunning(pid: state.pid) {
-                break
-            }
-        }
-
-        clearState()
-        return (true, "Stopped live wallpaper engine (PID: \(state.pid)).")
-    }
-
     public func start(with url: URL) {
         self.videoURL = url
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        WallpaperEngine.saveState(videoPath: url.path)
-        setupWindows()
         setupPowerAndSystemObservers()
-
-        signal(SIGINT) { _ in
-            WallpaperEngine.shared.stop()
-            exit(0)
-        }
-        signal(SIGTERM) { _ in
-            WallpaperEngine.shared.stop()
-            exit(0)
-        }
+        setupWindows()
     }
 
     private func setupPowerAndSystemObservers() {
         systemObservers.forEach { NotificationCenter.default.removeObserver($0) }
         systemObservers.removeAll()
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        workspaceObservers.removeAll()
 
         let ws = NSWorkspace.shared.notificationCenter
 
         // 1. Display and system sleep observers
-        systemObservers.append(ws.addObserver(
+        workspaceObservers.append(ws.addObserver(
             forName: NSWorkspace.screensDidSleepNotification,
             object: nil,
             queue: .main
@@ -165,7 +79,7 @@ public final class WallpaperEngine: NSObject {
             self?.setSystemSleeping(true)
         })
 
-        systemObservers.append(ws.addObserver(
+        workspaceObservers.append(ws.addObserver(
             forName: NSWorkspace.screensDidWakeNotification,
             object: nil,
             queue: .main
@@ -173,7 +87,7 @@ public final class WallpaperEngine: NSObject {
             self?.setSystemSleeping(false)
         })
 
-        systemObservers.append(ws.addObserver(
+        workspaceObservers.append(ws.addObserver(
             forName: NSWorkspace.willSleepNotification,
             object: nil,
             queue: .main
@@ -181,7 +95,7 @@ public final class WallpaperEngine: NSObject {
             self?.setSystemSleeping(true)
         })
 
-        systemObservers.append(ws.addObserver(
+        workspaceObservers.append(ws.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
@@ -287,13 +201,16 @@ public final class WallpaperEngine: NSObject {
             entries.append(entry)
 
             window.orderFrontRegardless()
-            queuePlayer.play()
         }
+        updatePlaybackState()
     }
 
     public func stop() {
         tearDownWindows()
-        WallpaperEngine.clearState()
+        systemObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        systemObservers.removeAll()
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        workspaceObservers.removeAll()
     }
 
     private func tearDownWindows() {

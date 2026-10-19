@@ -13,7 +13,7 @@ Thank you for your interest in contributing to deskloop.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/deskloop.git
+git clone <repository-url>
 cd deskloop
 
 # Build debug binary
@@ -24,6 +24,9 @@ swift test
 
 # Build optimized release binary
 swift build -c release
+.build/release/deskloop --help
+.build/release/deskloop --version
+.build/release/deskloop sources
 ```
 
 ## Project architecture
@@ -70,3 +73,13 @@ Both human-crafted and AI-assisted contributions are welcome, provided they meet
 - [ ] `swift build -c release` succeeds without warnings.
 - [ ] Added or updated unit tests for new logic.
 - [ ] Documentation updated in `README.md` if CLI flags or options changed.
+
+## Review and compatibility
+
+Please open an issue before starting a large feature or a new wallpaper provider.
+Keep pull requests focused and explain the macOS versions and display configurations
+used for manual testing. We support macOS 13 and newer; changes to playback, sleep,
+screen sharing, or display handling need manual verification on the configurations
+they affect.
+
+Do not add media assets from providers unless their redistribution terms permit it.

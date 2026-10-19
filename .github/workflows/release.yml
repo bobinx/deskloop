@@ -15,6 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Run test suite
+        run: swift test
+
       - name: Build arm64
         run: swift build -c release --triple arm64-apple-macosx
 
@@ -32,6 +35,25 @@ jobs:
           cd dist
           tar -czf deskloop-${{ github.ref_name }}-macos-universal.tar.gz deskloop
           shasum -a 256 deskloop-${{ github.ref_name }}-macos-universal.tar.gz > deskloop-${{ github.ref_name }}-macos-universal.tar.gz.sha256
+
+      - name: Verify release artifacts
+        run: |
+          set -euo pipefail
+
+          binary=dist/deskloop
+          archive=dist/deskloop-${{ github.ref_name }}-macos-universal.tar.gz
+          checksum="${archive}.sha256"
+
+          test -x "$binary"
+          architectures=$(lipo -archs "$binary")
+          echo "Universal binary architectures: $architectures"
+          [[ "$architectures" == "arm64 x86_64" || "$architectures" == "x86_64 arm64" ]]
+
+          "$binary" --version
+          "$binary" --help >/dev/null
+
+          tar -tzf "$archive" | grep -Fx 'deskloop'
+          (cd dist && shasum -a 256 -c "$(basename "$checksum")")
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2

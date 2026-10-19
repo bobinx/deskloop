@@ -8,15 +8,12 @@ public final class FileDownloader: NSObject, Sendable {
         to destination: URL,
         progress: @escaping (Double) -> Void
     ) async throws {
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try? FileManager.default.removeItem(at: destination)
-        }
-
         let delegate = DownloadTaskDelegate(progress: progress)
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 600
         let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
 
         let tempURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
             delegate.continuation = continuation
@@ -24,16 +21,25 @@ public final class FileDownloader: NSObject, Sendable {
             task.resume()
         }
 
+        let fileManager = FileManager.default
         let parentDir = destination.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
-        try FileManager.default.moveItem(at: tempURL, to: destination)
-        session.finishTasksAndInvalidate()
+        try fileManager.createDirectory(at: parentDir, withIntermediateDirectories: true)
+        let stagedURL = parentDir.appendingPathComponent(".deskloop-download-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: stagedURL) }
+        try fileManager.moveItem(at: tempURL, to: stagedURL)
+
+        if fileManager.fileExists(atPath: destination.path) {
+            _ = try fileManager.replaceItemAt(destination, withItemAt: stagedURL)
+        } else {
+            try fileManager.moveItem(at: stagedURL, to: destination)
+        }
     }
 }
 
 private final class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let progress: (Double) -> Void
     var continuation: CheckedContinuation<URL, Error>?
+    private let lock = NSLock()
 
     init(progress: @escaping (Double) -> Void) {
         self.progress = progress
@@ -57,19 +63,40 @@ private final class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate, 
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
+        if let response = downloadTask.response as? HTTPURLResponse,
+           !(1...299).contains(response.statusCode) {
+            resume(throwing: URLError(.badServerResponse))
+            return
+        }
         let tempDestination = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         do {
             try FileManager.default.moveItem(at: location, to: tempDestination)
-            continuation?.resume(returning: tempDestination)
+            resume(returning: tempDestination)
         } catch {
-            continuation?.resume(throwing: error)
+            resume(throwing: error)
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
-            continuation?.resume(throwing: error)
+            resume(throwing: error)
         }
+    }
+
+    private func resume(returning url: URL) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: url)
+    }
+
+    private func resume(throwing error: Error) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(throwing: error)
     }
 }

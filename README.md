@@ -9,23 +9,10 @@ A lightweight command line live wallpaper engine for macOS with multi-monitor su
 
 ## Installation
 
-### Option 1: Via Homebrew (Recommended once tap is published)
+### Build from source
 
 ```bash
-brew tap your-username/deskloop
-brew install deskloop
-```
-
-### Option 2: Quick install (1-line script)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/your-username/deskloop/main/install.sh | bash
-```
-
-### Option 3: Manual build from source
-
-```bash
-git clone https://github.com/your-username/deskloop.git
+git clone <repository-url>
 cd deskloop
 make install
 ```
@@ -34,14 +21,17 @@ Or run directly without installing system-wide:
 
 ```bash
 swift build -c release
-./deskloop --help
+.build/release/deskloop --help
 ```
+
+`make install` installs to `/usr/local/bin` by default. Choose another location with
+`make install PREFIX="$HOME/.local"` and ensure that directory is on your `PATH`.
 
 ## Supported sources
 
 deskloop focuses on two reliable video sources:
 
-1. **`apple` (default)**: 114 official Apple 4K Aerial and screensaver loops (drone, satellite, and underwater scenes) streamed and cached directly from Apple's CDN (`sylvan.apple.com`). Requires no API key.
+1. **`apple` (default)**: Apple Aerial loops (drone, satellite, and underwater scenes) streamed and cached directly from Apple's CDN (`sylvan.apple.com`). Requires no API key.
 2. **`local`**: Any local video file (`.mp4`, `.mov`, `.m4v`) or directory on your Mac.
 
 To use external videos (from YouTube, Wallpaper Engine, reddit, or stock sites), download the `.mp4` file and pass its path or URL directly to `deskloop apply`.
@@ -138,11 +128,28 @@ deskloop cache clear
 
 Video playback consumes battery if unmanaged. deskloop implements five power safeguards:
 
-- **Window occlusion auto-pause**: Video decoding halts when open application windows cover the desktop, dropping CPU and GPU usage to zero. Playback resumes automatically when the desktop becomes visible.
+- **Window occlusion auto-pause**: Playback pauses when the desktop window is occluded and resumes when it becomes visible.
 - **Display sleep friendly**: Configured so macOS screens sleep normally according to your Energy Saver settings.
-- **Sleep tracking**: Video decoding pauses during display or system sleep.
+- **Sleep tracking**: Playback pauses during display or system sleep.
 - **Low Power Mode awareness**: Automatically suspends playback when macOS enters battery saver mode.
-- **Hardware accelerated**: Uses VideoToolbox to decode directly into Metal surfaces without CPU buffer copying. Audio playback is muted to avoid CoreAudio wakeups.
+- **Hardware accelerated playback**: AVFoundation uses macOS's supported video playback path. Audio is muted.
+
+## Data, network, and privacy
+
+Deskloop stores its state, logs, downloaded videos, and extracted static frames in
+`~/.deskloop/`. `cache clear` removes downloaded videos but keeps static wallpaper
+frames. The `apple` source requests its catalog and videos from Apple's CDN; direct
+URLs are contacted only when you apply them. The live wallpaper windows opt out of
+window sharing so the wallpaper is not offered to screen-capture clients.
+
+## Current limits
+
+- The same video is applied to every connected display.
+- Live wallpaper playback lasts until `deskloop stop`, a signal, or process exit;
+  Deskloop does not currently install a login item or persistent background service.
+- Direct URLs must point to a video stream that AVFoundation can play.
+- Apple-provided media is not redistributed by this project. Check the source's
+  applicable terms before sharing downloaded files.
 
 ## License
 

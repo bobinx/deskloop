@@ -19,7 +19,13 @@ final class DeskloopTests: XCTestCase {
 
     func testEngineStateSerialization() throws {
         let now = Date()
-        let original = EngineState(pid: 12345, videoPath: "/path/to/video.mp4", startTime: now)
+        let original = EngineState(
+            pid: 12345,
+            videoPath: "/path/to/video.mp4",
+            startTime: now,
+            executablePath: "/usr/local/bin/deskloop",
+            processStartTime: now
+        )
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -31,6 +37,7 @@ final class DeskloopTests: XCTestCase {
 
         XCTAssertEqual(decoded.pid, 12345)
         XCTAssertEqual(decoded.videoPath, "/path/to/video.mp4")
+        XCTAssertEqual(decoded.executablePath, "/usr/local/bin/deskloop")
         XCTAssertEqual(Int(decoded.startTime.timeIntervalSince1970), Int(now.timeIntervalSince1970))
     }
 

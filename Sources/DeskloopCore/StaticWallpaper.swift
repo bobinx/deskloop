@@ -8,11 +8,11 @@ public enum StaticWallpaperService {
         let ext = fileURL.pathExtension.lowercased()
         if ext == "mp4" || ext == "mov" || ext == "m4v" {
             // Extract first frame
-            let cacheDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".deskloop/cache", isDirectory: true)
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            let staticDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".deskloop/static", isDirectory: true)
+            try FileManager.default.createDirectory(at: staticDir, withIntermediateDirectories: true)
 
-            let frameURL = cacheDir.appendingPathComponent("static_frame_\(fileURL.lastPathComponent).png")
+            let frameURL = staticDir.appendingPathComponent("static_frame_\(fileURL.lastPathComponent).png")
             try extractFirstFrame(from: fileURL, saveTo: frameURL)
             finalImageURL = frameURL
         }

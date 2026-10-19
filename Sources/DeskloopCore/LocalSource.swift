@@ -45,7 +45,15 @@ public final class LocalSource: WallpaperSource, Sendable {
     public func resolve(id: String) async throws -> WallpaperItem? {
         let expanded = NSString(string: id).expandingTildeInPath
         let url = URL(fileURLWithPath: expanded)
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        var values: URLResourceValues
+        do {
+            values = try url.resourceValues(forKeys: [.isRegularFileKey])
+        } catch {
+            return nil
+        }
+        let supportedExtensions = ["mp4", "mov", "m4v"]
+        guard values.isRegularFile == true,
+              supportedExtensions.contains(url.pathExtension.lowercased()) else {
             return nil
         }
         return WallpaperItem(
