@@ -2,51 +2,7 @@ import Foundation
 import AppKit
 import DeskloopCore
 
-let deskloopVersion = "1.1.0"
-
-func printUsage() {
-    print("""
-    \u{001B}[1;36mdeskloop\u{001B}[0m v\(deskloopVersion) - Native Live Wallpaper Engine for macOS
-
-    \u{001B}[1mUSAGE:\u{001B}[0m
-        deskloop <command> [options]
-
-    \u{001B}[1mCOMMANDS:\u{001B}[0m
-        \u{001B}[32mapply\u{001B}[0m, \u{001B}[32mlive\u{001B}[0m <id|path|url> [--daemon] Apply live video wallpaper across all displays
-        \u{001B}[32mstatus\u{001B}[0m [--json]                         Check running wallpaper engine status
-        \u{001B}[32mstop\u{001B}[0m [--json]                           Stop running live wallpaper daemon
-        \u{001B}[32mfeatured\u{001B}[0m [limit] [--json]               Browse featured 4K wallpapers
-        \u{001B}[32msearch\u{001B}[0m <query> [--json]                 Search wallpapers by keyword
-        \u{001B}[32mdownload\u{001B}[0m <id> [-o path]                 Download video wallpaper to local disk
-        \u{001B}[32mset-static\u{001B}[0m <id|path|url>               Set first frame as native static desktop wallpaper
-        \u{001B}[32msources\u{001B}[0m [--json]                        List available wallpaper sources
-        \u{001B}[32mcache\u{001B}[0m [list|clear] [--json]             Manage downloaded wallpaper cache
-        \u{001B}[32mmcp\u{001B}[0m                                      Start Model Context Protocol (MCP) server over stdio
-
-    \u{001B}[1mOPTIONS:\u{001B}[0m
-        \u{001B}[33m--source <name>\u{001B}[0m                       Select source: \u{001B}[1mapple\u{001B}[0m (default) or \u{001B}[1mlocal\u{001B}[0m
-        \u{001B}[33m--daemon\u{001B}[0m                              Run silently in the background
-        \u{001B}[33m--json\u{001B}[0m                                Output results in machine-readable JSON format
-        \u{001B}[33m-h, --help\u{001B}[0m                            Show this help menu
-        \u{001B}[33m-v, --version\u{001B}[0m                         Show version information
-
-    \u{001B}[1mPOWER MANAGEMENT:\u{001B}[0m
-        • Occlusion auto-pause: Video decoding pauses when windows cover the desktop
-        • Display sleep friendly: Lets macOS screens sleep normally when idle
-        • Sleep tracking: 0% CPU and 0% GPU usage during display or system sleep
-        • Low Power Mode detection: Automatically suspends playback on battery saver
-        • Hardware accelerated: VideoToolbox decoding directly to Metal surfaces
-
-    \u{001B}[1mEXAMPLES:\u{001B}[0m
-        deskloop featured 10
-        deskloop search "Greenland" --json
-        deskloop apply "Korea and Japan Night" --daemon
-        deskloop apply ~/Movies/wallpaper.mp4 --daemon
-        deskloop status --json
-        deskloop stop
-        deskloop mcp
-    """)
-}
+let deskloopVersion = "1.2.0"
 
 func getRegisteredSources() -> [String: WallpaperSource] {
     let apple = AppleAerialSource()
@@ -195,8 +151,8 @@ do {
         sources: sources
     )
     switch command {
-    case .help:
-        printUsage()
+    case let .help(command):
+        print(CLIHelp.text(for: command))
         exit(0)
 
     case let .version(json):
@@ -287,33 +243,19 @@ do {
         print("\n\u{001B}[32mSaved to:\u{001B}[0m \(destinationURL.path)")
         exit(0)
 
-    case let .apply(sourceName, target, isDaemon):
+    case let .apply(sourceName, target, isDaemon, json):
         let source = sourceName
-        let videoURL = try resolveVideoURL(target: target, source: source)
+        let videoURL = try resolveVideoURL(target: target, source: source, silent: json)
 
         if isDaemon {
-            let executablePath: String
-            if let path = Bundle.main.executablePath, FileManager.default.fileExists(atPath: path) {
-                executablePath = path
+            let state = try EngineProcessController.startDaemon(videoURL: videoURL)
+            if json {
+                printJSONObject(["status": "running", "pid": state.pid, "video": state.videoPath])
             } else {
-                executablePath = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
+                print("Started live wallpaper engine (PID: \(state.pid))")
+                print("Video: \(state.videoPath)")
+                print("Logs: \(EngineProcessController.logFileURL.path)")
             }
-
-            let logFile = EngineProcessController.logFileURL
-            FileManager.default.createFile(atPath: logFile.path, contents: nil)
-            let logHandle = try FileHandle(forWritingTo: logFile)
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = ["apply", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
-            process.standardOutput = logHandle
-            process.standardError = logHandle
-            try process.run()
-
-            print("\u{001B}[32mStarted live wallpaper daemon (PID: \(process.processIdentifier))\u{001B}[0m")
-            print("Video: \(videoURL.isFileURL ? videoURL.path : videoURL.absoluteString)")
-            print("Logs: \(logFile.path)")
-            print("Run \u{001B}[1mdeskloop status\u{001B}[0m or \u{001B}[1mdeskloop stop\u{001B}[0m to manage.")
             exit(0)
         } else {
             print("\u{001B}[32mStarting live video wallpaper on all connected displays...\u{001B}[0m")
@@ -322,7 +264,6 @@ do {
             print("Press \u{001B}[1mCtrl+C\u{001B}[0m to stop.")
 
             let engineLease = try EngineProcessController.acquireEngineLease()
-            try EngineProcessController.saveState(videoURL: videoURL)
             let signalHandler = ApplicationSignalHandler {
                 WallpaperEngine.shared.stop()
                 do {
@@ -334,6 +275,7 @@ do {
             }
             _ = signalHandler
             WallpaperEngine.shared.start(with: videoURL)
+            try EngineProcessController.saveState(videoURL: videoURL)
             withExtendedLifetime((signalHandler, engineLease)) {
                 NSApplication.shared.run()
             }
@@ -505,6 +447,11 @@ do {
         exit(0)
     }
 } catch {
-    print("\u{001B}[31mError:\u{001B}[0m \(error.localizedDescription)")
+    if CommandLine.arguments.contains("--json") {
+        let failure = error as NSError
+        printJSONObject(["error": ["domain": failure.domain, "code": failure.code, "message": failure.localizedDescription]])
+    } else {
+        fputs("deskloop: \(error.localizedDescription)\nRun 'deskloop --help' for usage.\n", stderr)
+    }
     exit(1)
 }

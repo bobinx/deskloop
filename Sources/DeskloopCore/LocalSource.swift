@@ -10,7 +10,7 @@ public final class LocalSource: WallpaperSource, Sendable {
         let defaultDirs = [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies/Wallpapers"),
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/Wallpapers"),
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".deskloop/cache")
+            DeskloopPaths.dataDirectory.appendingPathComponent("cache")
         ]
 
         var items: [WallpaperItem] = []

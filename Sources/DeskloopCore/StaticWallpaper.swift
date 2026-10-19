@@ -8,8 +8,7 @@ public enum StaticWallpaperService {
         let ext = fileURL.pathExtension.lowercased()
         if ext == "mp4" || ext == "mov" || ext == "m4v" {
             // Extract first frame
-            let staticDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".deskloop/static", isDirectory: true)
+            let staticDir = DeskloopPaths.dataDirectory.appendingPathComponent("static", isDirectory: true)
             try FileManager.default.createDirectory(at: staticDir, withIntermediateDirectories: true)
 
             let frameURL = staticDir.appendingPathComponent("static_frame_\(fileURL.lastPathComponent).png")

@@ -17,8 +17,5 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
-      - name: Build Release Binary
-        run: swift build -c release
-
-      - name: Run Test Suite
-        run: swift test
+      - name: Verify builds, unit tests, and CLI/MCP contracts
+        run: make verify

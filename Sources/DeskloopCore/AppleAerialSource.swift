@@ -34,8 +34,7 @@ public final class AppleAerialSource: WallpaperSource, Sendable {
     public init() {}
 
     private func cacheDirectory() -> URL {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".deskloop/cache", isDirectory: true)
+        let dir = DeskloopPaths.dataDirectory.appendingPathComponent("cache", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

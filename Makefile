@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
-.PHONY: all build test install uninstall clean
+.PHONY: all build test install uninstall clean verify
 
 all: build
 
@@ -20,3 +20,9 @@ uninstall:
 
 clean:
 	rm -rf .build dist
+
+verify:
+	swift test
+	swift build
+	swift build -c release
+	python3 Scripts/verify-cli.py .build/release/deskloop

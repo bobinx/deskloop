@@ -8,22 +8,17 @@ Thank you for your interest in contributing to deskloop.
 
 - macOS 13.0 or later
 - Swift 5.9 or later (included with Xcode 15+ or Command Line Tools)
+- Python 3 for CLI/MCP contract checks
 
 ### Building and testing
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/bobinx/deskloop.git
 cd deskloop
 
-# Build debug binary
-swift build
-
-# Run unit tests
-swift test
-
-# Build optimized release binary
-swift build -c release
+# Run unit tests, debug/release builds, and offline CLI/MCP checks
+make verify
 .build/release/deskloop --help
 .build/release/deskloop --version
 .build/release/deskloop sources
@@ -62,15 +57,14 @@ New sources should:
 
 Both human-crafted and AI-assisted contributions are welcome, provided they meet our quality bar:
 
-- **Verification over self-reporting**: Run `swift test` and test real wallpaper playback before opening a PR. Do not submit unverified code.
+- **Verification over self-reporting**: Run `make verify` for code changes. For playback, power, privacy, or display changes, also test the affected behavior in a graphical macOS session. Record checks you cannot run and why. Documentation-only changes need link and command review.
 - **Maintain power invariants**: Never disable occlusion detection or sleep tracking. `preventsDisplaySleepDuringVideoPlayback` must remain `false`.
 - **Zero third-party dependencies**: Do not introduce CocoaPods, Carthage, or third-party SwiftPM dependencies. Keep the binary lightweight and self-contained.
 - **Clean diffs**: Avoid stylistic churn, unsolicited reformatting, or AI-tell commentary. Keep changes focused.
 
 ## Pull request checklist
 
-- [ ] `swift test` passes with zero failures.
-- [ ] `swift build -c release` succeeds without warnings.
+- [ ] `make verify` passes, or environment limitations are recorded.
 - [ ] Added or updated unit tests for new logic.
 - [ ] Documentation updated in `README.md` if CLI flags or options changed.
 
@@ -83,3 +77,17 @@ screen sharing, or display handling need manual verification on the configuratio
 they affect.
 
 Do not add media assets from providers unless their redistribution terms permit it.
+
+## Manual engine verification
+
+For changes to the engine or process lifecycle, use a local playable video and
+record the result of applying, checking status, stopping, and applying again.
+For display or power changes, also check the affected cases: covering the desktop,
+sleep and wake, Low Power Mode, display connection changes, and Spaces.
+For privacy changes, verify wallpaper capture behavior with the supported macOS
+versions. Automated checks do not establish these OS behaviors.
+
+Small bug fixes, tests, and documentation improvements can go directly to a PR.
+Use the PR template to describe observable behavior and verification. Include a
+reproduction command for bugs. Changes to CLI or MCP contracts need offline
+checks in `Scripts/verify-cli.py` and updated help or agent documentation.

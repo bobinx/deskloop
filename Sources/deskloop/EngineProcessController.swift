@@ -4,13 +4,46 @@ import Foundation
 import DeskloopCore
 
 enum EngineProcessController {
-    static let appDirectory: URL = {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".deskloop", isDirectory: true)
-    }()
+    static let appDirectory = DeskloopPaths.dataDirectory
 
     static let stateFileURL = appDirectory.appendingPathComponent("live.json")
     static let logFileURL = appDirectory.appendingPathComponent("live.log")
     private static let lockFileURL = appDirectory.appendingPathComponent("engine.lock")
+
+    static func startDaemon(videoURL: URL) throws -> EngineState {
+        try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+        let logHandle = try FileHandle(forWritingTo: createLogFile())
+        defer { try? logHandle.close() }
+        try logHandle.seekToEnd()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
+        process.arguments = ["apply", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = logHandle
+        process.standardError = logHandle
+        try process.run()
+        var acknowledged = false
+        defer {
+            if !acknowledged && process.isRunning { process.terminate() }
+        }
+        for _ in 0..<100 {
+            if let state = try loadState(), state.pid == process.processIdentifier, isRunning(state) {
+                acknowledged = true
+                return state
+            }
+            if !process.isRunning { break }
+            usleep(50_000)
+        }
+        throw NSError(domain: "deskloop", code: 8, userInfo: [NSLocalizedDescriptionKey:
+            "Wallpaper engine did not acknowledge startup. Check \(logFileURL.path). If an engine is already running, stop it before applying another wallpaper."])
+    }
+
+    private static func createLogFile() throws -> URL {
+        if !FileManager.default.fileExists(atPath: logFileURL.path) {
+            try Data().write(to: logFileURL)
+        }
+        return logFileURL
+    }
 
     static func saveState(videoURL: URL) throws {
         try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
@@ -65,7 +98,7 @@ enum EngineProcessController {
                 return (true, "Stopped live wallpaper engine (PID: \(state.pid)).")
             }
         }
-        return (false, "Live wallpaper engine (PID: \(state.pid)) did not stop within two seconds.")
+        throw NSError(domain: "deskloop", code: 9, userInfo: [NSLocalizedDescriptionKey: "Live wallpaper engine (PID: \(state.pid)) did not stop within two seconds."])
     }
 
     static func clearState(ownedBy pid: Int32) throws {

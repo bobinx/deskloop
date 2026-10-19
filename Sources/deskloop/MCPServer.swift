@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CoreFoundation
 import DeskloopCore
 
 public final class MCPServer: Sendable {
@@ -29,6 +30,7 @@ public final class MCPServer: Sendable {
                 if lineData.isEmpty { continue }
 
                 guard let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else {
+                    sendError(id: NSNull(), code: -32700, message: "Invalid JSON request")
                     continue
                 }
 
@@ -102,45 +104,21 @@ public final class MCPServer: Sendable {
 
                 let videoURL = try resolveVideoURL(target: target, source: source, silent: true)
 
-                // Start daemon
-                let executablePath: String
-                if let path = Bundle.main.executablePath, FileManager.default.fileExists(atPath: path) {
-                    executablePath = path
-                } else {
-                    executablePath = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
-                }
-
-                let logFile = EngineProcessController.logFileURL
-                FileManager.default.createFile(atPath: logFile.path, contents: nil)
-                let logHandle = try FileHandle(forWritingTo: logFile)
-
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: executablePath)
-                process.arguments = ["apply", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
-                process.standardOutput = logHandle
-                process.standardError = logHandle
-                try process.run()
-
-                let text = """
-                Started live wallpaper daemon (PID: \(process.processIdentifier))
-                Video: \(videoURL.isFileURL ? videoURL.path : videoURL.absoluteString)
-                Displays: \(NSScreen.screens.count) connected
-                Logs: \(logFile.path)
-                """
-                sendToolSuccess(id: id, text: text)
+                let state = try EngineProcessController.startDaemon(videoURL: videoURL)
+                sendToolSuccess(id: id, text: "Started live wallpaper engine (PID: \(state.pid))\nVideo: \(state.videoPath)")
 
             case "stop_wallpaper":
                 let result = try EngineProcessController.stopRunningEngine()
                 sendToolSuccess(id: id, text: result.message)
 
             case "get_status":
-                guard let state = try? EngineProcessController.loadState() else {
+                guard let state = try EngineProcessController.loadState() else {
                     sendToolSuccess(id: id, text: "Status: Stopped (No live wallpaper engine running)")
                     return
                 }
                 let isRunning = EngineProcessController.isRunning(state)
                 if !isRunning {
-                    try? EngineProcessController.clearState(ownedBy: state.pid)
+                    try EngineProcessController.clearState(ownedBy: state.pid)
                     sendToolSuccess(id: id, text: "Status: Stopped (Cleaned up stale PID \(state.pid))")
                 } else {
                     let formatter = RelativeDateTimeFormatter()
@@ -162,7 +140,7 @@ public final class MCPServer: Sendable {
                     sendToolError(id: id, message: "Missing required argument 'query'")
                     return
                 }
-                let limit = arguments["limit"] as? Int ?? 10
+                let limit = try validatedLimit(arguments["limit"])
                 let source = sources["apple"]!
                 let items = try runAsync { try await source.search(query: query) }
                 let results = Array(items.prefix(limit))
@@ -174,7 +152,7 @@ public final class MCPServer: Sendable {
                 }
 
             case "list_featured":
-                let limit = arguments["limit"] as? Int ?? 10
+                let limit = try validatedLimit(arguments["limit"])
                 let source = sources["apple"]!
                 let items = try runAsync { try await source.fetchFeatured(limit: limit) }
                 let results = Array(items.prefix(limit))
@@ -201,6 +179,17 @@ public final class MCPServer: Sendable {
         } catch {
             sendToolError(id: id, message: error.localizedDescription)
         }
+    }
+
+    private func validatedLimit(_ value: Any?) throws -> Int {
+        guard let value else { return 10 }
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue >= 1, number.doubleValue <= 100,
+              number.doubleValue.rounded() == number.doubleValue else {
+            throw NSError(domain: "deskloop", code: 3, userInfo: [NSLocalizedDescriptionKey: "limit must be an integer from 1 to 100."])
+        }
+        return number.intValue
     }
 
     private func sendToolSuccess(id: Any?, text: String) {
@@ -314,7 +303,9 @@ public final class MCPServer: Sendable {
                         ],
                         "limit": [
                             "type": "integer",
-                            "description": "Maximum number of results to return (default 10)"
+                            "description": "Maximum number of results to return (default 10)",
+                            "minimum": 1,
+                            "maximum": 100
                         ]
                     ],
                     "required": ["query"]
@@ -328,7 +319,9 @@ public final class MCPServer: Sendable {
                     "properties": [
                         "limit": [
                             "type": "integer",
-                            "description": "Maximum number of results to return (default 10)"
+                            "description": "Maximum number of results to return (default 10)",
+                            "minimum": 1,
+                            "maximum": 100
                         ]
                     ]
                 ] as [String: Any]

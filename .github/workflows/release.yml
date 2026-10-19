@@ -21,8 +21,25 @@ jobs:
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
-      - name: Run test suite
-        run: swift test
+      - name: Prepare release notes and check version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          import re
+          from pathlib import Path
+          version = os.environ["RELEASE_TAG"][1:]
+          source = Path("Sources/deskloop/main.swift").read_text()
+          assert f'let deskloopVersion = "{version}"' in source, "Tag and binary version differ"
+          changelog = Path("CHANGELOG.md").read_text()
+          match = re.search(r"^## \[" + re.escape(version) + r"\] - \d{4}-\d{2}-\d{2}\n(.*?)(?=^## |\Z)", changelog, re.M | re.S)
+          assert match and match.group(1).strip(), "Release needs a changelog entry"
+          Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(match.group(1).strip() + "\n")
+          PYTHON
+
+      - name: Verify builds and CLI/MCP contracts
+        run: make verify
 
       - name: Build arm64
         run: swift build -c release --triple arm64-apple-macosx --scratch-path .build/arm64
@@ -66,7 +83,7 @@ jobs:
           files: |
             dist/deskloop-*.tar.gz
             dist/deskloop-*.sha256
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
 
   update-homebrew:
     name: Open Homebrew formula update

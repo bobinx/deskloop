@@ -1,6 +1,6 @@
 # deskloop
 
-> **CLI live video wallpaper engine for macOS.** Loop any local video (`.mp4`, `.mov`) or official Apple 4K Aerial across all monitors with hardware acceleration and zero battery drain when occluded or sleeping. Built with zero dependencies, native Model Context Protocol (MCP) support, and machine-readable JSON mode for AI agents.
+> **CLI live video wallpaper engine for macOS.** Loop any local video (`.mp4`, `.mov`) or official Apple 4K Aerial across all monitors with hardware acceleration and playback paused when occluded or sleeping. Built with zero dependencies, native Model Context Protocol (MCP) support, and machine-readable JSON mode for AI agents.
 
 ## Requirements
 
@@ -63,10 +63,13 @@ Add `deskloop` to your `claude_desktop_config.json` or Cursor MCP settings:
 - **`list_featured`**: List featured official Apple 4K Aerials.
 - **`set_static_wallpaper`**: Set the first frame of a video as the system static desktop wallpaper.
 
+See [the agent workflow guide](docs/agents.md) for selection, verification, failure handling, and contribution checks.
+
 ### Machine-Readable JSON Mode
-Every query and status command supports `--json` for seamless scripting and agent execution:
+Query and status commands support `--json`. Background apply also supports `--json` and acknowledges engine startup before returning:
 
 ```bash
+deskloop apply ~/Movies/loop.mp4 --daemon --json
 deskloop status --json
 deskloop search "Greenland" --json
 deskloop featured 10 --json
@@ -201,6 +204,12 @@ Deskloop stores its state, logs, downloaded videos, and extracted static frames 
 - Live wallpaper playback lasts until `deskloop stop`, a signal, or process exit; Deskloop does not currently install a login item or persistent background service.
 - Direct URLs must point to a video stream that AVFoundation can play.
 - Apple-provided media is not redistributed by this project. Check the source's applicable terms before sharing downloaded files.
+
+## Contribute
+
+Human and agent-authored PRs are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
+and run `make verify` for builds, unit tests, and offline CLI/MCP checks.
+Run `deskloop <command> --help` for command syntax and defaults.
 
 ## License
 

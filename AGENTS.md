@@ -44,7 +44,7 @@ When making code changes, agents must preserve the following power management an
 
 ## 3. Build & Test Commands
 
-Always verify your changes before declaring completion:
+Run `make verify` before declaring code changes complete. It runs the following builds and tests plus offline CLI/MCP contract checks:
 
 ```bash
 # Run unit tests
@@ -57,9 +57,9 @@ swift build
 swift build -c release
 
 # Check CLI flags
-./deskloop --help
-./deskloop --version
-./deskloop sources
+.build/release/deskloop --help
+.build/release/deskloop --version
+.build/release/deskloop sources
 ```
 
 ---
@@ -92,3 +92,18 @@ Rules for new sources:
 - **Error Handling**: Bubble errors to `main.swift` with descriptive messages. Never swallow errors with empty `catch {}`.
 - **Formatting**: Preserve existing indentation (4 spaces) and naming conventions.
 - **Purity**: Avoid global mutable state. Keep power state transitions inside `WallpaperEngine`.
+
+## 6. Navigation and contribution workflow
+
+- CLI syntax and options: `Sources/deskloop/CLICommand.swift`.
+- Help text: `Sources/deskloop/CLIHelp.swift`. Update it when command behavior changes.
+- Command execution and output: `Sources/deskloop/main.swift`.
+- MCP transport and tool contracts: `Sources/deskloop/MCPServer.swift`.
+- Process identity, startup acknowledgement, and engine lease: `Sources/deskloop/EngineProcessController.swift`.
+- Offline interface checks: `Scripts/verify-cli.py`.
+
+For agent usage or MCP integration, read `docs/agents.md`.
+For PRs, follow `CONTRIBUTING.md` and the PR template. Record unperformed checks
+explicitly. Manual playback checks apply to playback, power, privacy, and display
+changes; docs-only changes do not require them. Keep desktop-changing tests out
+of `make verify`. Use `DESKLOOP_HOME` for isolated CLI state in tests.

@@ -2,13 +2,13 @@ import Foundation
 import DeskloopCore
 
 enum CLICommand {
-    case help
+    case help(command: String?)
     case version(json: Bool)
     case sources(json: Bool)
     case featured(source: WallpaperSource, limit: Int, json: Bool)
     case search(source: WallpaperSource, query: String, json: Bool)
     case download(source: WallpaperSource, id: String, outputPath: String)
-    case apply(source: WallpaperSource, target: String, daemon: Bool)
+    case apply(source: WallpaperSource, target: String, daemon: Bool, json: Bool)
     case status(json: Bool)
     case stop(json: Bool)
     case setStatic(source: WallpaperSource, target: String)
@@ -23,16 +23,34 @@ enum CacheAction {
 
 enum CLICommandParser {
     static func parse(_ arguments: [String], sources: [String: WallpaperSource]) throws -> CLICommand {
-        guard !arguments.isEmpty else { return .help }
+        guard !arguments.isEmpty else { return .help(command: nil) }
         let (tokens, source, sourceWasProvided, isJSON) = try extractOptions(from: arguments)
-        guard let rawCommand = tokens.first else { return .help }
+        guard let rawCommand = tokens.first else {
+            throw usage("deskloop <command> [options]")
+        }
         let command = rawCommand.lowercased()
         let values = Array(tokens.dropFirst())
 
+        if command == "help" && values.isEmpty && !sourceWasProvided && !isJSON {
+            return .help(command: nil)
+        }
+        if values.contains("--help") || values.contains("-h") || command == "help" {
+            let rawTopic = command == "help" ? values.first : command
+            let aliases = ["live": "apply", "trending": "featured", "list": "featured"]
+            let topic = rawTopic.map { aliases[$0] ?? $0 }
+            guard !sourceWasProvided, !isJSON, let topic, CLIHelp.commands[topic] != nil,
+                  command != "help" || values.count == 1 else {
+                throw usage("deskloop help <command>")
+            }
+            return .help(command: topic)
+        }
+        if isJSON && ["--help", "-h", "download", "set-static", "mcp"].contains(command) {
+            throw usage("--json is supported by version, sources, featured, search, apply --daemon, status, stop, and cache")
+        }
         switch command {
         case "-h", "--help", "help":
             try require(values.isEmpty && !sourceWasProvided, usage: "deskloop --help")
-            return .help
+            return .help(command: nil)
         case "-v", "--version", "version":
             try require(values.isEmpty && !sourceWasProvided, usage: "deskloop --version [--json]")
             return .version(json: isJSON)
@@ -71,7 +89,10 @@ enum CLICommandParser {
             guard options.isEmpty || options == ["--daemon"] else {
                 throw usage("deskloop apply <id|path|url> [--daemon] [--source name]")
             }
-            return .apply(source: try resolveSource(source, sources: sources), target: target, daemon: options.contains("--daemon"))
+            if isJSON && !options.contains("--daemon") {
+                throw usage("deskloop apply <id|path|url> --daemon --json")
+            }
+            return .apply(source: try resolveSource(source, sources: sources), target: target, daemon: options.contains("--daemon"), json: isJSON)
         case "status":
             try require(values.isEmpty && !sourceWasProvided, usage: "deskloop status [--json]")
             return .status(json: isJSON)
