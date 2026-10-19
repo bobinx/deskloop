@@ -25,18 +25,17 @@ jobs:
         run: swift test
 
       - name: Build arm64
-        run: swift build -c release --triple arm64-apple-macosx
+        run: swift build -c release --triple arm64-apple-macosx --scratch-path .build/arm64
 
       - name: Build x86_64
-        run: swift build -c release --triple x86_64-apple-macosx
+        run: swift build -c release --triple x86_64-apple-macosx --scratch-path .build/x86_64
 
       - name: Create Universal Binary
         run: |
           mkdir -p dist
-          lipo -create \
-            .build/arm64-apple-macosx/release/deskloop \
-            .build/x86_64-apple-macosx/release/deskloop \
-            -output dist/deskloop
+          arm64_bin=$(swift build -c release --triple arm64-apple-macosx --scratch-path .build/arm64 --show-bin-path)/deskloop
+          x86_64_bin=$(swift build -c release --triple x86_64-apple-macosx --scratch-path .build/x86_64 --show-bin-path)/deskloop
+          lipo -create "$arm64_bin" "$x86_64_bin" -output dist/deskloop
           chmod +x dist/deskloop
           cd dist
           tar -czf deskloop-${{ github.ref_name }}-macos-universal.tar.gz deskloop
@@ -93,16 +92,22 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          source_url="https://github.com/bobinx/deskloop/archive/refs/tags/${RELEASE_TAG}.tar.gz"
-          source_archive="$RUNNER_TEMP/deskloop-${RELEASE_TAG}-source.tar.gz"
+          binary_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/deskloop-${RELEASE_TAG}-macos-universal.tar.gz"
+          binary_archive="$RUNNER_TEMP/deskloop-${RELEASE_TAG}-macos-universal.tar.gz"
 
-          curl --fail --location --silent --show-error "$source_url" --output "$source_archive"
-          source_sha256=$(shasum -a 256 "$source_archive" | awk '{ print $1 }')
+          for i in {1..12}; do
+            if curl --fail --location --silent --show-error "$binary_url" --output "$binary_archive"; then
+              break
+            fi
+            echo "Waiting for release asset to be available ($i/12)..."
+            sleep 5
+          done
+          binary_sha256=$(shasum -a 256 "$binary_archive" | awk '{ print $1 }')
 
           branch=automation/homebrew-release
           git checkout -B "$branch" origin/main
           python3 Scripts/update-homebrew-formula.py \
-            Formula/deskloop.rb "$version" "$source_url" "$source_sha256"
+            Formula/deskloop.rb "$version" "$binary_url" "$binary_sha256"
 
           git diff --check
           git add Formula/deskloop.rb
@@ -117,7 +122,7 @@ jobs:
           git push --force origin "HEAD:refs/heads/${branch}"
 
           title="Update Homebrew formula to ${version}"
-          body="Update the Homebrew formula to build the source archive for ${RELEASE_TAG}. The release workflow verified this tagged source and its checksum."
+          body="Update the Homebrew formula to install the precompiled universal binary for ${RELEASE_TAG}."
           export GH_TOKEN="${GITHUB_TOKEN}"
           pull_request=$(gh pr list --repo "$GITHUB_REPOSITORY" \
             --head "$branch" --state open --json number --jq '.[0].number // empty')

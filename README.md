@@ -13,10 +13,10 @@ A lightweight command line live wallpaper engine for macOS with multi-monitor su
 
 ```bash
 brew tap bobinx/deskloop https://github.com/bobinx/deskloop
-brew install bobinx/deskloop/deskloop
+brew install deskloop
 ```
 
-Homebrew builds deskloop from source, so Xcode 15 or newer is required.
+Installs the precompiled universal macOS binary (Apple Silicon and Intel). No Xcode or local compilation required.
 
 ### Build from source
 

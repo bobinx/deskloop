@@ -1,17 +1,14 @@
 class Deskloop < Formula
   desc "Native macOS live wallpaper engine"
   homepage "https://github.com/bobinx/deskloop"
-  url "https://github.com/bobinx/deskloop/archive/116517b7e3ca6f3f894b93e4d768632fa946db65.tar.gz"
-  version "1.0.0"
-  sha256 "b7d62df18346c73632501bfdb708c13606ca16293bf14b04f646a32f4cdb8a4e"
+  url "https://github.com/bobinx/deskloop/releases/download/v1.0.0/deskloop-v1.0.0-macos-universal.tar.gz"
+  sha256 "44caebcdd66942ca32c213c459d37be156d4a8ee72c53957337e2e5fe7aaf3d4"
   license "MIT"
 
-  depends_on xcode: ["15.0", :build]
   depends_on macos: :ventura
 
   def install
-    system "swift", "build", "--product", "deskloop", *std_swift_args
-    bin.install ".build/release/deskloop"
+    bin.install "deskloop"
   end
 
   test do

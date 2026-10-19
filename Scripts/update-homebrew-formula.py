@@ -27,7 +27,8 @@ def main() -> None:
 
     content = args.formula.read_text()
     content = replace_once(content, r'^  url ".*"$', f'  url "{args.url}"')
-    content = replace_once(content, r'^  version ".*"$', f'  version "{args.version}"')
+    if re.search(r'^  version ".*"$', content, flags=re.MULTILINE):
+        content = replace_once(content, r'^  version ".*"$', f'  version "{args.version}"')
     content = replace_once(content, r'^  sha256 ".*"$', f'  sha256 "{args.sha256}"')
     args.formula.write_text(content)
 
