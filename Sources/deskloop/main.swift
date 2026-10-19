@@ -81,20 +81,27 @@ func formatTable(_ rows: [[String]], headers: [String]) {
     }
 }
 
-func runAsync<T>(_ block: @escaping () async throws -> T) throws -> T {
+private final class AsyncResultBox<T: Sendable>: @unchecked Sendable {
     var result: Result<T, Error>?
+}
+
+func runAsync<T: Sendable>(_ block: @escaping @Sendable () async throws -> T) throws -> T {
+    let box = AsyncResultBox<T>()
     let semaphore = DispatchSemaphore(value: 0)
     Task {
         do {
             let val = try await block()
-            result = .success(val)
+            box.result = .success(val)
         } catch {
-            result = .failure(error)
+            box.result = .failure(error)
         }
         semaphore.signal()
     }
     semaphore.wait()
-    switch result! {
+    guard let result = box.result else {
+        throw NSError(domain: "deskloop", code: -1, userInfo: [NSLocalizedDescriptionKey: "Task failed to return a result."])
+    }
+    switch result {
     case .success(let val): return val
     case .failure(let err): throw err
     }

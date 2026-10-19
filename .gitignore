@@ -8,3 +8,5 @@ Package.resolved
 *~
 /deskloop
 dist/
+__pycache__/
+*.pyc

@@ -15,6 +15,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+
       - name: Run test suite
         run: swift test
 
@@ -62,3 +68,62 @@ jobs:
             dist/deskloop-*.tar.gz
             dist/deskloop-*.sha256
           generate_release_notes: true
+
+  update-homebrew:
+    name: Open Homebrew formula update
+    needs: release
+    runs-on: macos-14
+    concurrency:
+      group: homebrew-formula-update
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update formula for release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          source_url="https://codeload.github.com/bobinx/deskloop/tar.gz/refs/tags/${RELEASE_TAG}"
+          source_archive="$RUNNER_TEMP/deskloop-${RELEASE_TAG}-source.tar.gz"
+
+          curl --fail --location --silent --show-error "$source_url" --output "$source_archive"
+          source_sha256=$(shasum -a 256 "$source_archive" | awk '{ print $1 }')
+
+          branch=automation/homebrew-release
+          git checkout -B "$branch" origin/main
+          python3 Scripts/update-homebrew-formula.py \
+            Formula/deskloop.rb "$version" "$source_url" "$source_sha256"
+
+          git diff --check
+          git add Formula/deskloop.rb
+          if git diff --cached --quiet; then
+            echo "Homebrew formula already matches ${RELEASE_TAG}"
+            exit 0
+          fi
+
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update Homebrew formula to ${version}"
+          git push --force origin "HEAD:refs/heads/${branch}"
+
+          title="Update Homebrew formula to ${version}"
+          body="Update the Homebrew formula to build the source archive for ${RELEASE_TAG}. The release workflow verified this tagged source and its checksum."
+          export GH_TOKEN="${GITHUB_TOKEN}"
+          pull_request=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$pull_request" ]]; then
+            gh pr edit "$pull_request" --title "$title" --body "$body"
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main \
+              --head "$branch" --title "$title" --body "$body"
+          fi

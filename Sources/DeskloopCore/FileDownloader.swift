@@ -6,7 +6,7 @@ public final class FileDownloader: NSObject, Sendable {
     public func download(
         from url: URL,
         to destination: URL,
-        progress: @escaping (Double) -> Void
+        progress: @escaping @Sendable (Double) -> Void
     ) async throws {
         let delegate = DownloadTaskDelegate(progress: progress)
         let config = URLSessionConfiguration.default
@@ -37,11 +37,11 @@ public final class FileDownloader: NSObject, Sendable {
 }
 
 private final class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    let progress: (Double) -> Void
+    let progress: @Sendable (Double) -> Void
     var continuation: CheckedContinuation<URL, Error>?
     private let lock = NSLock()
 
-    init(progress: @escaping (Double) -> Void) {
+    init(progress: @escaping @Sendable (Double) -> Void) {
         self.progress = progress
     }
 
