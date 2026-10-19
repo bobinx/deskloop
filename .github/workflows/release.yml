@@ -93,7 +93,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          source_url="https://codeload.github.com/bobinx/deskloop/tar.gz/refs/tags/${RELEASE_TAG}"
+          source_url="https://github.com/bobinx/deskloop/archive/refs/tags/${RELEASE_TAG}.tar.gz"
           source_archive="$RUNNER_TEMP/deskloop-${RELEASE_TAG}-source.tar.gz"
 
           curl --fail --location --silent --show-error "$source_url" --output "$source_archive"
