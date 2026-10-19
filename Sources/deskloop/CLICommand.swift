@@ -3,16 +3,17 @@ import DeskloopCore
 
 enum CLICommand {
     case help
-    case version
-    case sources
-    case featured(source: WallpaperSource, limit: Int)
-    case search(source: WallpaperSource, query: String)
+    case version(json: Bool)
+    case sources(json: Bool)
+    case featured(source: WallpaperSource, limit: Int, json: Bool)
+    case search(source: WallpaperSource, query: String, json: Bool)
     case download(source: WallpaperSource, id: String, outputPath: String)
     case apply(source: WallpaperSource, target: String, daemon: Bool)
-    case status
-    case stop
+    case status(json: Bool)
+    case stop(json: Bool)
     case setStatic(source: WallpaperSource, target: String)
-    case cache(CacheAction)
+    case cache(CacheAction, json: Bool)
+    case mcp
 }
 
 enum CacheAction {
@@ -23,7 +24,7 @@ enum CacheAction {
 enum CLICommandParser {
     static func parse(_ arguments: [String], sources: [String: WallpaperSource]) throws -> CLICommand {
         guard !arguments.isEmpty else { return .help }
-        let (tokens, source, sourceWasProvided) = try extractSource(from: arguments)
+        let (tokens, source, sourceWasProvided, isJSON) = try extractOptions(from: arguments)
         guard let rawCommand = tokens.first else { return .help }
         let command = rawCommand.lowercased()
         let values = Array(tokens.dropFirst())
@@ -33,20 +34,20 @@ enum CLICommandParser {
             try require(values.isEmpty && !sourceWasProvided, usage: "deskloop --help")
             return .help
         case "-v", "--version", "version":
-            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop --version")
-            return .version
+            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop --version [--json]")
+            return .version(json: isJSON)
         case "sources":
-            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop sources")
-            return .sources
+            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop sources [--json]")
+            return .sources(json: isJSON)
         case "featured", "trending", "list":
             guard values.count <= 1 else {
-                throw usage("deskloop featured [limit] [--source name]")
+                throw usage("deskloop featured [limit] [--source name] [--json]")
             }
             let limit = try positiveLimit(values.first)
-            return .featured(source: try resolveSource(source, sources: sources), limit: limit)
+            return .featured(source: try resolveSource(source, sources: sources), limit: limit, json: isJSON)
         case "search":
-            guard !values.isEmpty else { throw usage("deskloop search <query> [--source name]") }
-            return .search(source: try resolveSource(source, sources: sources), query: values.joined(separator: " "))
+            guard !values.isEmpty else { throw usage("deskloop search <query> [--source name] [--json]") }
+            return .search(source: try resolveSource(source, sources: sources), query: values.joined(separator: " "), json: isJSON)
         case "download":
             guard let id = values.first else { throw usage("deskloop download <id> [-o path] [--source name]") }
             let outputPath: String
@@ -72,11 +73,11 @@ enum CLICommandParser {
             }
             return .apply(source: try resolveSource(source, sources: sources), target: target, daemon: options.contains("--daemon"))
         case "status":
-            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop status")
-            return .status
+            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop status [--json]")
+            return .status(json: isJSON)
         case "stop":
-            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop stop")
-            return .stop
+            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop stop [--json]")
+            return .stop(json: isJSON)
         case "set-static":
             guard values.count == 1 else {
                 throw usage("deskloop set-static <id|path|url> [--source name]")
@@ -84,22 +85,26 @@ enum CLICommandParser {
             return .setStatic(source: try resolveSource(source, sources: sources), target: values[0])
         case "cache":
             guard values.count <= 1 && !sourceWasProvided else {
-                throw usage("deskloop cache [list|clear]")
+                throw usage("deskloop cache [list|clear] [--json]")
             }
             switch values.first?.lowercased() ?? "list" {
-            case "list", "ls": return .cache(.list)
-            case "clear", "clean", "purge": return .cache(.clear)
-            default: throw usage("deskloop cache [list|clear]")
+            case "list", "ls": return .cache(.list, json: isJSON)
+            case "clear", "clean", "purge": return .cache(.clear, json: isJSON)
+            default: throw usage("deskloop cache [list|clear] [--json]")
             }
+        case "mcp":
+            try require(values.isEmpty && !sourceWasProvided, usage: "deskloop mcp")
+            return .mcp
         default:
             throw NSError(domain: "deskloop", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown command: \(rawCommand)"])
         }
     }
 
-    private static func extractSource(from arguments: [String]) throws -> (tokens: [String], source: String, wasProvided: Bool) {
+    private static func extractOptions(from arguments: [String]) throws -> (tokens: [String], source: String, wasProvided: Bool, isJSON: Bool) {
         var tokens: [String] = []
         var source = "apple"
         var sourceWasProvided = false
+        var isJSON = false
         var index = 0
 
         while index < arguments.count {
@@ -111,12 +116,15 @@ enum CLICommandParser {
                 source = arguments[index + 1].lowercased()
                 sourceWasProvided = true
                 index += 2
+            } else if argument == "--json" {
+                isJSON = true
+                index += 1
             } else {
                 tokens.append(argument)
                 index += 1
             }
         }
-        return (tokens, source, sourceWasProvided)
+        return (tokens, source, sourceWasProvided, isJSON)
     }
 
     private static func resolveSource(_ name: String, sources: [String: WallpaperSource]) throws -> WallpaperSource {

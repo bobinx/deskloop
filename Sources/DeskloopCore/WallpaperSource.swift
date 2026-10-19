@@ -1,6 +1,6 @@
 import Foundation
 
-public struct WallpaperItem: Identifiable, Sendable {
+public struct WallpaperItem: Identifiable, Sendable, Codable {
     public let id: String
     public let title: String
     public let sourceName: String

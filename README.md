@@ -1,6 +1,6 @@
 # deskloop
 
-A lightweight command line live wallpaper engine for macOS with multi-monitor support, occlusion-based power saving, and official Apple 4K aerial loops.
+> **CLI live video wallpaper engine for macOS.** Loop any local video (`.mp4`, `.mov`) or official Apple 4K Aerial across all monitors with hardware acceleration and zero battery drain when occluded or sleeping. Built with zero dependencies, native Model Context Protocol (MCP) support, and machine-readable JSON mode for AI agents.
 
 ## Requirements
 
@@ -9,7 +9,7 @@ A lightweight command line live wallpaper engine for macOS with multi-monitor su
 
 ## Installation
 
-### Homebrew
+### Homebrew (Recommended)
 
 ```bash
 brew tap bobinx/deskloop https://github.com/bobinx/deskloop
@@ -21,7 +21,7 @@ Installs the precompiled universal macOS binary (Apple Silicon and Intel). No Xc
 ### Build from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/bobinx/deskloop.git
 cd deskloop
 make install
 ```
@@ -33,8 +33,48 @@ swift build -c release
 .build/release/deskloop --help
 ```
 
-`make install` installs to `/usr/local/bin` by default. Choose another location with
-`make install PREFIX="$HOME/.local"` and ensure that directory is on your `PATH`.
+`make install` installs to `/usr/local/bin` by default. Choose another location with `make install PREFIX="$HOME/.local"` and ensure that directory is on your `PATH`.
+
+---
+
+## AI Agent & MCP Integration
+
+`deskloop` includes a built-in stdio [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. AI assistants (Claude Desktop, Cursor, Antigravity, etc.) can discover and manage live wallpapers as first-class tools.
+
+### Connect to Claude Desktop or Cursor
+Add `deskloop` to your `claude_desktop_config.json` or Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "deskloop": {
+      "command": "deskloop",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Available Tools:
+- **`apply_wallpaper`**: Set a video path, direct URL, or Apple Aerial as the live looping wallpaper across all monitors.
+- **`stop_wallpaper`**: Stop the running live wallpaper daemon.
+- **`get_status`**: Get live wallpaper status, PID, active video path, and connected displays.
+- **`search_wallpapers`**: Search Apple 4K Aerials by keyword or location.
+- **`list_featured`**: List featured official Apple 4K Aerials.
+- **`set_static_wallpaper`**: Set the first frame of a video as the system static desktop wallpaper.
+
+### Machine-Readable JSON Mode
+Every query and status command supports `--json` for seamless scripting and agent execution:
+
+```bash
+deskloop status --json
+deskloop search "Greenland" --json
+deskloop featured 10 --json
+deskloop sources --json
+deskloop cache list --json
+```
+
+---
 
 ## Supported sources
 
@@ -44,6 +84,8 @@ deskloop focuses on two reliable video sources:
 2. **`local`**: Any local video file (`.mp4`, `.mov`, `.m4v`) or directory on your Mac.
 
 To use external videos (from YouTube, Wallpaper Engine, reddit, or stock sites), download the `.mp4` file and pass its path or URL directly to `deskloop apply`.
+
+---
 
 ## Usage
 
@@ -133,6 +175,8 @@ Delete cached videos to reclaim disk space:
 deskloop cache clear
 ```
 
+---
+
 ## Power and resource management
 
 Video playback consumes battery if unmanaged. deskloop implements five power safeguards:
@@ -143,22 +187,20 @@ Video playback consumes battery if unmanaged. deskloop implements five power saf
 - **Low Power Mode awareness**: Automatically suspends playback when macOS enters battery saver mode.
 - **Hardware accelerated playback**: AVFoundation uses macOS's supported video playback path. Audio is muted.
 
+---
+
 ## Data, network, and privacy
 
-Deskloop stores its state, logs, downloaded videos, and extracted static frames in
-`~/.deskloop/`. `cache clear` removes downloaded videos but keeps static wallpaper
-frames. The `apple` source requests its catalog and videos from Apple's CDN; direct
-URLs are contacted only when you apply them. The live wallpaper windows opt out of
-window sharing so the wallpaper is not offered to screen-capture clients.
+Deskloop stores its state, logs, downloaded videos, and extracted static frames in `~/.deskloop/`. `cache clear` removes downloaded videos but keeps static wallpaper frames. The `apple` source requests its catalog and videos from Apple's CDN; direct URLs are contacted only when you apply them. The live wallpaper windows opt out of window sharing so the wallpaper pixels are never captured during screen shares or recordings.
+
+---
 
 ## Current limits
 
 - The same video is applied to every connected display.
-- Live wallpaper playback lasts until `deskloop stop`, a signal, or process exit;
-  Deskloop does not currently install a login item or persistent background service.
+- Live wallpaper playback lasts until `deskloop stop`, a signal, or process exit; Deskloop does not currently install a login item or persistent background service.
 - Direct URLs must point to a video stream that AVFoundation can play.
-- Apple-provided media is not redistributed by this project. Check the source's
-  applicable terms before sharing downloaded files.
+- Apple-provided media is not redistributed by this project. Check the source's applicable terms before sharing downloaded files.
 
 ## License
 

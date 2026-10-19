@@ -69,4 +69,28 @@ final class DeskloopTests: XCTestCase {
         XCTAssertEqual(source.name, "local")
         XCTAssertFalse(source.description.isEmpty)
     }
+
+    func testWallpaperItemCodable() throws {
+        let item = WallpaperItem(
+            id: "codable-test",
+            title: "Codable Wallpaper",
+            sourceName: "apple",
+            resolution: "4K UHD",
+            duration: "Loop",
+            videoURL: URL(string: "https://example.com/video.mp4")!,
+            thumbnailURL: URL(string: "https://example.com/thumb.jpg"),
+            category: "Nature"
+        )
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(item)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(WallpaperItem.self, from: data)
+
+        XCTAssertEqual(decoded.id, "codable-test")
+        XCTAssertEqual(decoded.title, "Codable Wallpaper")
+        XCTAssertEqual(decoded.sourceName, "apple")
+        XCTAssertEqual(decoded.category, "Nature")
+        XCTAssertEqual(decoded.thumbnailURL?.absoluteString, "https://example.com/thumb.jpg")
+    }
 }

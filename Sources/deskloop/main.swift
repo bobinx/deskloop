@@ -13,18 +13,20 @@ func printUsage() {
 
     \u{001B}[1mCOMMANDS:\u{001B}[0m
         \u{001B}[32mapply\u{001B}[0m, \u{001B}[32mlive\u{001B}[0m <id|path|url> [--daemon] Apply live video wallpaper across all displays
-        \u{001B}[32mstatus\u{001B}[0m                                  Check running wallpaper engine status
-        \u{001B}[32mstop\u{001B}[0m                                    Stop running live wallpaper daemon
-        \u{001B}[32mfeatured\u{001B}[0m [limit]                       Browse featured 4K wallpapers
-        \u{001B}[32msearch\u{001B}[0m <query>                         Search wallpapers by keyword
+        \u{001B}[32mstatus\u{001B}[0m [--json]                         Check running wallpaper engine status
+        \u{001B}[32mstop\u{001B}[0m [--json]                           Stop running live wallpaper daemon
+        \u{001B}[32mfeatured\u{001B}[0m [limit] [--json]               Browse featured 4K wallpapers
+        \u{001B}[32msearch\u{001B}[0m <query> [--json]                 Search wallpapers by keyword
         \u{001B}[32mdownload\u{001B}[0m <id> [-o path]                 Download video wallpaper to local disk
         \u{001B}[32mset-static\u{001B}[0m <id|path|url>               Set first frame as native static desktop wallpaper
-        \u{001B}[32msources\u{001B}[0m                                List available wallpaper sources
-        \u{001B}[32mcache\u{001B}[0m [list|clear]                      Manage downloaded wallpaper cache
+        \u{001B}[32msources\u{001B}[0m [--json]                        List available wallpaper sources
+        \u{001B}[32mcache\u{001B}[0m [list|clear] [--json]             Manage downloaded wallpaper cache
+        \u{001B}[32mmcp\u{001B}[0m                                      Start Model Context Protocol (MCP) server over stdio
 
     \u{001B}[1mOPTIONS:\u{001B}[0m
         \u{001B}[33m--source <name>\u{001B}[0m                       Select source: \u{001B}[1mapple\u{001B}[0m (default) or \u{001B}[1mlocal\u{001B}[0m
         \u{001B}[33m--daemon\u{001B}[0m                              Run silently in the background
+        \u{001B}[33m--json\u{001B}[0m                                Output results in machine-readable JSON format
         \u{001B}[33m-h, --help\u{001B}[0m                            Show this help menu
         \u{001B}[33m-v, --version\u{001B}[0m                         Show version information
 
@@ -37,12 +39,12 @@ func printUsage() {
 
     \u{001B}[1mEXAMPLES:\u{001B}[0m
         deskloop featured 10
-        deskloop search "Greenland"
+        deskloop search "Greenland" --json
         deskloop apply "Korea and Japan Night" --daemon
         deskloop apply ~/Movies/wallpaper.mp4 --daemon
-        deskloop status
+        deskloop status --json
         deskloop stop
-        deskloop cache clear
+        deskloop mcp
     """)
 }
 
@@ -53,6 +55,21 @@ func getRegisteredSources() -> [String: WallpaperSource] {
         apple.name: apple,
         local.name: local
     ]
+}
+
+func printJSON<T: Encodable>(_ value: T) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    if let data = try? encoder.encode(value), let str = String(data: data, encoding: .utf8) {
+        print(str)
+    }
+}
+
+func printJSONObject(_ dict: [String: Any]) {
+    if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+       let str = String(data: data, encoding: .utf8) {
+        print(str)
+    }
 }
 
 func formatTable(_ rows: [[String]], headers: [String]) {
@@ -107,7 +124,7 @@ func runAsync<T: Sendable>(_ block: @escaping @Sendable () async throws -> T) th
     }
 }
 
-func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
+func resolveVideoURL(target: String, source: WallpaperSource, silent: Bool = false) throws -> URL {
     let expanded = NSString(string: target).expandingTildeInPath
     if FileManager.default.fileExists(atPath: expanded) {
         return URL(fileURLWithPath: expanded)
@@ -131,7 +148,9 @@ func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
         return localCache
     }
 
-    print("Resolving '\(target)' from source [\(source.name)]...")
+    if !silent {
+        print("Resolving '\(target)' from source [\(source.name)]...")
+    }
     var matched = try runAsync({ try await source.resolve(id: target) })
     if matched == nil {
         let searchRes = try runAsync({ try await source.search(query: target) })
@@ -148,18 +167,24 @@ func resolveVideoURL(target: String, source: WallpaperSource) throws -> URL {
         return item.videoURL
     }
 
-    print("Downloading \"\(item.title)\"...")
+    if !silent {
+        print("Downloading \"\(item.title)\"...")
+    }
     try runAsync {
         try await FileDownloader.shared.download(from: item.videoURL, to: localCache) { progress in
-            let percent = Int(progress * 100)
-            let barLength = 30
-            let filled = Int(progress * Double(barLength))
-            let bar = String(repeating: "#", count: filled) + String(repeating: "-", count: max(0, barLength - filled))
-            print("\r[\(bar)] \(percent)%", terminator: "")
-            fflush(stdout)
+            if !silent {
+                let percent = Int(progress * 100)
+                let barLength = 30
+                let filled = Int(progress * Double(barLength))
+                let bar = String(repeating: "#", count: filled) + String(repeating: "-", count: max(0, barLength - filled))
+                print("\r[\(bar)] \(percent)%", terminator: "")
+                fflush(stdout)
+            }
         }
     }
-    print("\nDownload complete.")
+    if !silent {
+        print("\nDownload complete.")
+    }
     return localCache
 }
 
@@ -173,47 +198,70 @@ do {
     case .help:
         printUsage()
         exit(0)
-    case .version:
-        print("deskloop version \(deskloopVersion)")
-        exit(0)
-    case .sources:
-        let all = getRegisteredSources()
-        let rows = all.values.sorted(by: { $0.name < $1.name }).map { [$0.name, $0.description] }
-        print("\n\u{001B}[1;32mAvailable Wallpaper Sources:\u{001B}[0m")
-        formatTable(rows, headers: ["Source Name", "Description"])
+
+    case let .version(json):
+        if json {
+            printJSONObject(["name": "deskloop", "version": deskloopVersion])
+        } else {
+            print("deskloop version \(deskloopVersion)")
+        }
         exit(0)
 
-    case let .featured(sourceName, limit):
+    case let .sources(json):
+        let all = getRegisteredSources()
+        if json {
+            let list = all.values.sorted(by: { $0.name < $1.name }).map {
+                ["name": $0.name, "description": $0.description]
+            }
+            printJSONObject(["sources": list])
+        } else {
+            let rows = all.values.sorted(by: { $0.name < $1.name }).map { [$0.name, $0.description] }
+            print("\n\u{001B}[1;32mAvailable Wallpaper Sources:\u{001B}[0m")
+            formatTable(rows, headers: ["Source Name", "Description"])
+        }
+        exit(0)
+
+    case let .featured(sourceName, limit, json):
         let source = sourceName
         let items = try runAsync { try await source.fetchFeatured(limit: limit) }
-        let rows = items.map { [
-            $0.id,
-            $0.title,
-            $0.category ?? "N/A",
-            $0.resolution,
-            $0.duration
-        ] }
-        print("\n\u{001B}[1;32mFeatured Wallpapers (Source: \(source.name)):\u{001B}[0m (\(items.count) items)")
-        formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
+        if json {
+            printJSON(items)
+        } else {
+            let rows = items.map { [
+                $0.id,
+                $0.title,
+                $0.category ?? "N/A",
+                $0.resolution,
+                $0.duration
+            ] }
+            print("\n\u{001B}[1;32mFeatured Wallpapers (Source: \(source.name)):\u{001B}[0m (\(items.count) items)")
+            formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
+        }
         exit(0)
 
-    case let .search(sourceName, query):
+    case let .search(sourceName, query, json):
         let source = sourceName
-        print("Searching [\(source.name)] for: \"\(query)\"...")
-        let results = try runAsync { try await source.search(query: query) }
-        if results.isEmpty {
-            print("No wallpapers found matching \"\(query)\" in source '\(source.name)'.")
-            exit(0)
+        if !json {
+            print("Searching [\(source.name)] for: \"\(query)\"...")
         }
-        let rows = results.prefix(25).map { [
-            $0.id,
-            $0.title,
-            $0.category ?? "N/A",
-            $0.resolution,
-            $0.duration
-        ] }
-        print("\n\u{001B}[1;32mSearch Results (\(source.name)):\u{001B}[0m (\(results.count) found)")
-        formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
+        let results = try runAsync { try await source.search(query: query) }
+        if json {
+            printJSON(results)
+        } else {
+            if results.isEmpty {
+                print("No wallpapers found matching \"\(query)\" in source '\(source.name)'.")
+                exit(0)
+            }
+            let rows = results.prefix(25).map { [
+                $0.id,
+                $0.title,
+                $0.category ?? "N/A",
+                $0.resolution,
+                $0.duration
+            ] }
+            print("\n\u{001B}[1;32mSearch Results:\u{001B}[0m (\(results.count) found)")
+            formatTable(rows, headers: ["ID", "Title", "Category", "Resolution", "Duration"])
+        }
         exit(0)
 
     case let .download(sourceName, targetId, outputPath):
@@ -291,16 +339,27 @@ do {
             }
         }
 
-    case .status:
+    case let .status(json):
         guard let state = try EngineProcessController.loadState() else {
-            print("Status: \u{001B}[33mStopped\u{001B}[0m (No live wallpaper engine running)")
+            if json {
+                printJSONObject(["status": "stopped"])
+            } else {
+                print("Status: \u{001B}[33mStopped\u{001B}[0m (No live wallpaper engine running)")
+            }
             exit(0)
         }
 
         let isRunning = EngineProcessController.isRunning(state)
         if !isRunning {
             try EngineProcessController.clearState(ownedBy: state.pid)
-            print("Status: \u{001B}[33mStopped\u{001B}[0m (Cleaned up stale process record PID \(state.pid))")
+            if json {
+                printJSONObject([
+                    "status": "stopped",
+                    "cleanedStalePID": state.pid
+                ])
+            } else {
+                print("Status: \u{001B}[33mStopped\u{001B}[0m (Cleaned up stale process record PID \(state.pid))")
+            }
             exit(0)
         }
 
@@ -309,22 +368,42 @@ do {
         formatter.unitsStyle = .full
         let uptimeString = formatter.localizedString(for: state.startTime, relativeTo: Date())
 
-        print("""
-        Status:          \u{001B}[32mRunning\u{001B}[0m
-        Process ID:      \(state.pid)
-        Active Video:    \(state.videoPath)
-        Started:         \(uptimeString)
-        Active Displays: \(screenCount) connected display\(screenCount == 1 ? "" : "s")
-        Log File:        \(EngineProcessController.logFileURL.path)
-        """)
+        if json {
+            let iso = ISO8601DateFormatter()
+            printJSONObject([
+                "status": "running",
+                "pid": state.pid,
+                "video": state.videoPath,
+                "startTime": iso.string(from: state.startTime),
+                "uptime": uptimeString,
+                "displays": screenCount,
+                "logFile": EngineProcessController.logFileURL.path
+            ])
+        } else {
+            print("""
+            Status:          \u{001B}[32mRunning\u{001B}[0m
+            Process ID:      \(state.pid)
+            Active Video:    \(state.videoPath)
+            Started:         \(uptimeString)
+            Active Displays: \(screenCount) connected display\(screenCount == 1 ? "" : "s")
+            Log File:        \(EngineProcessController.logFileURL.path)
+            """)
+        }
         exit(0)
 
-    case .stop:
+    case let .stop(json):
         let result = try EngineProcessController.stopRunningEngine()
-        if result.success {
-            print("\u{001B}[32m\(result.message)\u{001B}[0m")
+        if json {
+            printJSONObject([
+                "success": result.success,
+                "message": result.message
+            ])
         } else {
-            print(result.message)
+            if result.success {
+                print("\u{001B}[32m\(result.message)\u{001B}[0m")
+            } else {
+                print(result.message)
+            }
         }
         exit(0)
 
@@ -337,13 +416,17 @@ do {
         print("\u{001B}[32mSuccessfully updated desktop wallpaper.\u{001B}[0m")
         exit(0)
 
-    case let .cache(action):
+    case let .cache(action, json):
         let cacheDir = EngineProcessController.appDirectory.appendingPathComponent("cache", isDirectory: true)
 
         switch action {
         case .clear:
             guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey]) else {
-                print("Cache directory is empty.")
+                if json {
+                    printJSONObject(["clearedFiles": 0, "freedBytes": 0, "freedSize": "0 B"])
+                } else {
+                    print("Cache directory is empty.")
+                }
                 exit(0)
             }
             var deletedCount = 0
@@ -356,35 +439,70 @@ do {
                 try? FileManager.default.removeItem(at: file)
                 deletedCount += 1
             }
-            print("\u{001B}[32mCleared \(deletedCount) cached video\(deletedCount == 1 ? "" : "s") (\(Utilities.formatBytes(freedBytes)) freed).\u{001B}[0m")
+            if json {
+                printJSONObject([
+                    "clearedFiles": deletedCount,
+                    "freedBytes": freedBytes,
+                    "freedSize": Utilities.formatBytes(freedBytes)
+                ])
+            } else {
+                print("\u{001B}[32mCleared \(deletedCount) cached video\(deletedCount == 1 ? "" : "s") (\(Utilities.formatBytes(freedBytes)) freed).\u{001B}[0m")
+            }
             exit(0)
 
         case .list:
             guard let files = try? FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else {
-                print("Cache is empty.")
+                if json {
+                    printJSONObject(["cacheDirectory": cacheDir.path, "files": [], "totalBytes": 0, "totalSize": "0 B"])
+                } else {
+                    print("Cache is empty.")
+                }
                 exit(0)
             }
             let videoFiles = files.filter { $0.pathExtension.lowercased() == "mp4" || $0.pathExtension.lowercased() == "mov" }
             if videoFiles.isEmpty {
-                print("Cache is empty (no downloaded videos in \(cacheDir.path)).")
+                if json {
+                    printJSONObject(["cacheDirectory": cacheDir.path, "files": [], "totalBytes": 0, "totalSize": "0 B"])
+                } else {
+                    print("Cache is empty (no downloaded videos in \(cacheDir.path)).")
+                }
                 exit(0)
             }
 
             var totalBytes: Int64 = 0
             var rows: [[String]] = []
+            var fileList: [[String: Any]] = []
             for file in videoFiles {
                 let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 totalBytes += Int64(size)
                 rows.append([file.lastPathComponent, Utilities.formatBytes(Int64(size))])
+                fileList.append([
+                    "name": file.lastPathComponent,
+                    "bytes": size,
+                    "size": Utilities.formatBytes(Int64(size))
+                ])
             }
 
-            print("\n\u{001B}[1;32mCached Video Wallpapers (\(cacheDir.path)):\u{001B}[0m")
-            formatTable(rows, headers: ["File Name", "Size"])
-            print("\nTotal disk usage: \u{001B}[1m\(Utilities.formatBytes(totalBytes))\u{001B}[0m across \(videoFiles.count) file\(videoFiles.count == 1 ? "" : "s").")
-            print("Run \u{001B}[1mdeskloop cache clear\u{001B}[0m to free up space.")
+            if json {
+                printJSONObject([
+                    "cacheDirectory": cacheDir.path,
+                    "files": fileList,
+                    "totalBytes": totalBytes,
+                    "totalSize": Utilities.formatBytes(totalBytes)
+                ])
+            } else {
+                print("\n\u{001B}[1;32mCached Video Wallpapers (\(cacheDir.path)):\u{001B}[0m")
+                formatTable(rows, headers: ["File Name", "Size"])
+                print("\nTotal disk usage: \u{001B}[1m\(Utilities.formatBytes(totalBytes))\u{001B}[0m across \(videoFiles.count) file\(videoFiles.count == 1 ? "" : "s").")
+                print("Run \u{001B}[1mdeskloop cache clear\u{001B}[0m to free up space.")
+            }
             exit(0)
-
         }
+
+    case .mcp:
+        let server = MCPServer(sources: sources)
+        server.run()
+        exit(0)
     }
 } catch {
     print("\u{001B}[31mError:\u{001B}[0m \(error.localizedDescription)")

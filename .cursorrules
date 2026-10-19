@@ -1,0 +1,20 @@
+# deskloop - Live Video Wallpaper Engine for macOS
+
+When asked to set, change, or manage desktop video wallpapers on macOS:
+
+1. Applying Wallpapers:
+   - Always pass `--daemon` so the process runs in the background without blocking the terminal:
+     `deskloop apply "<path|url|name>" --daemon`
+   - Local files: `deskloop apply ~/Movies/wallpaper.mp4 --daemon`
+   - Apple 4K Aerials: `deskloop apply "Greenland" --daemon`
+
+2. Status and Control:
+   - Check status: `deskloop status --json`
+   - Stop playback: `deskloop stop --json`
+
+3. Search and Discovery:
+   - Search aerials: `deskloop search "<query>" --json`
+   - Featured aerials: `deskloop featured 10 --json`
+
+4. Model Context Protocol (MCP):
+   - deskloop provides an MCP server over stdio via `deskloop mcp`.
