@@ -119,16 +119,11 @@ jobs:
           git -c user.name="github-actions[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "Update Homebrew formula to ${version}"
-          git push --force origin "HEAD:refs/heads/${branch}"
 
-          title="Update Homebrew formula to ${version}"
-          body="Update the Homebrew formula to install the precompiled universal binary for ${RELEASE_TAG}."
-          export GH_TOKEN="${GITHUB_TOKEN}"
-          pull_request=$(gh pr list --repo "$GITHUB_REPOSITORY" \
-            --head "$branch" --state open --json number --jq '.[0].number // empty')
-          if [[ -n "$pull_request" ]]; then
-            gh pr edit "$pull_request" --title "$title" --body "$body"
+          # Push directly to main branch
+          if git push origin "HEAD:main"; then
+            echo "Successfully updated Formula/deskloop.rb on main"
           else
-            gh pr create --repo "$GITHUB_REPOSITORY" --base main \
-              --head "$branch" --title "$title" --body "$body"
+            echo "Falling back to automation branch..."
+            git push --force origin "HEAD:refs/heads/${branch}"
           fi
