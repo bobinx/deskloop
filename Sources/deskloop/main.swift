@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import DeskloopCore
 
-let deskloopVersion = "1.0.0"
+let deskloopVersion = "1.1.0"
 
 func printUsage() {
     print("""
