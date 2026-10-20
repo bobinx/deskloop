@@ -9,6 +9,7 @@ Thank you for your interest in contributing to deskloop.
 - macOS 13.0 or later
 - Swift 5.9 or later (included with Xcode 15+ or Command Line Tools)
 - Python 3 for CLI/MCP contract checks
+- [pre-commit](https://pre-commit.com/) and [gitleaks](https://github.com/gitleaks/gitleaks) for secret scanning (`brew install pre-commit gitleaks`)
 
 ### Building and testing
 
@@ -18,6 +19,7 @@ git clone https://github.com/bobinx/deskloop.git
 cd deskloop
 
 # Run unit tests, debug/release builds, and offline CLI/MCP checks
+# (this also activates pre-commit and pre-push secret scanning hooks)
 make verify
 .build/release/deskloop --help
 .build/release/deskloop --version
@@ -62,9 +64,23 @@ Both human-crafted and AI-assisted contributions are welcome, provided they meet
 - **Zero third-party dependencies**: Do not introduce CocoaPods, Carthage, or third-party SwiftPM dependencies. Keep the binary lightweight and self-contained.
 - **Clean diffs**: Avoid stylistic churn, unsolicited reformatting, or AI-tell commentary. Keep changes focused.
 
+## Secret scanning
+
+Secrets, API keys, and credentials are blocked at three levels using
+[pre-commit](https://pre-commit.com/) and [gitleaks](https://github.com/gitleaks/gitleaks):
+
+1. **Pre-commit hook** — gitleaks scans staged changes before each commit.
+2. **Pre-push hook** — gitleaks scans changes before each push.
+3. **CI** — runs the official gitleaks GitHub Action on every PR and push to `main`.
+
+Hooks activate automatically the first time you run `make build`, `make test`,
+or `make verify`. You can also run `pre-commit install && pre-commit install --hook-type pre-push` manually.
+
+Run `gitleaks detect --verbose` to scan the full repo at any time.
+
 ## Pull request checklist
 
-- [ ] `make verify` passes, or environment limitations are recorded.
+- [ ] `make verify` passes (includes secret scan), or environment limitations are recorded.
 - [ ] Added or updated unit tests for new logic.
 - [ ] Documentation updated in `README.md` if CLI flags or options changed.
 
