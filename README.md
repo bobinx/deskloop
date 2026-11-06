@@ -1,57 +1,49 @@
 # deskloop
 
-```
-   Deskloop
-
-    ╔╦╗╔═╗╔═╗╦╔═╦  ╔═╗╔═╗╔═╗
-     ║║║╣ ╚═╗╠╩╗║  ║ ║║ ║╠═╝
-    ═╩╝╚═╝╚═╝╩ ╩╩═╝╚═╝╚═╝╩
-
-  │ Live video wallpaper for macOS.
-  │ Native Swift, hardware accelerated, and automatically pauses
-  │ the moment your desktop is covered.
-```
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-black.svg)](https://apple.com)
 [![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
 
+`deskloop` plays looping video wallpapers on macOS desktop windows from the command line.
+
+It displays video behind desktop icons, pauses decoding when windows cover the screen, and suspends during display sleep or Low Power Mode.
+
 ---
 
-## Getting started
+## Installation
 
-### 1. Install
-
-Using Homebrew:
+### Homebrew
 
 ```bash
 brew tap bobinx/deskloop https://github.com/bobinx/deskloop
 brew install deskloop
 ```
 
-Or build from source in seconds (no external packages needed):
+### From source
+
+Requires Swift 5.9+ and macOS 13.0+:
 
 ```bash
 git clone https://github.com/bobinx/deskloop.git
 cd deskloop && make install
 ```
 
-### 2. Run a wallpaper
+---
 
-Point it to any `.mp4`, `.mov`, or `.m4v` file:
+## Quick start
 
 ```bash
-# Run in the background across all your screens
+# Play a video in the background across all screens
 deskloop ~/Movies/loop.mp4 --daemon
 
 # Check status
 deskloop status
 
-# Stop and restore your original wallpaper
+# Stop playback
 deskloop stop
 ```
 
-You can also pass a direct video URL:
+Remote video URLs are also supported:
 
 ```bash
 deskloop "https://example.com/loop.mp4" --daemon
@@ -59,18 +51,11 @@ deskloop "https://example.com/loop.mp4" --daemon
 
 ---
 
-## Why I built this
+## Behavior
 
-I wanted looping video wallpapers on my Mac, but the existing tools bugged me:
-- Heavy GUI apps that burn 100MB+ of memory to loop an MP4.
-- Running Steam in the background just for Wallpaper Engine.
-- Battery drain. Most tools keep decoding frames at full speed even when you are buried in a full-screen editor.
-
-deskloop fixes that by doing less:
-1. **Pauses when covered.** macOS notifies deskloop when windows cover the desktop, and the video decoder pauses immediately to save CPU and battery.
-2. **Self-contained.** Built directly on AppKit and AVFoundation. Compiles in seconds to a single ~400KB binary with no external packages.
-3. **Safe.** Runs behind desktop icons (`kCGDesktopWindowLevel`) without touching system wallpaper settings. Stop it and your desktop returns to how you left it.
-4. **Sleep friendly.** Never blocks display sleep, pauses when screens sleep, and freezes on the current frame during Low Power Mode.
+- **Occlusion auto-pause:** macOS notifies deskloop when other windows cover the screen. Video decoding pauses immediately to avoid battery and CPU usage.
+- **Power awareness:** Playback stops immediately during display sleep, system sleep, or Low Power Mode.
+- **Non-destructive:** Windows are placed at `kCGDesktopWindowLevel` behind desktop icons. Stopping deskloop returns the desktop to your configured macOS wallpaper without altering system preferences.
 
 ---
 
@@ -78,10 +63,10 @@ deskloop fixes that by doing less:
 
 | Command | Description |
 | :--- | :--- |
-| `deskloop <file\|url> [--daemon]` | Play a video on all connected monitors |
+| `deskloop <file\|url> [--daemon]` | Play video on all connected monitors |
 | `deskloop run <file\|url> [--daemon]` | Explicit run syntax |
 | `deskloop status [--json]` | Show active video, process ID, uptime, and displays |
-| `deskloop stop [--json]` | Stop playback and restore original wallpaper |
+| `deskloop stop [--json]` | Stop playback and close wallpaper windows |
 | `deskloop --help` | Show usage options |
 | `deskloop --version` | Show installed version |
 
@@ -89,9 +74,7 @@ deskloop fixes that by doing less:
 
 ## Contributing
 
-Contributions and bug reports are welcome. Open an issue to discuss proposed changes before opening a pull request.
-
-deskloop follows the Unix philosophy: do one thing and do it well. It must stay small, battery-friendly, and focused on its core job.
+Open an issue to discuss proposed changes before submitting a pull request.
 
 ## License
 
