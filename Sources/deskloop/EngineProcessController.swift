@@ -17,7 +17,7 @@ enum EngineProcessController {
         try logHandle.seekToEnd()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
-        process.arguments = ["apply", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
+        process.arguments = ["run", videoURL.isFileURL ? videoURL.path : videoURL.absoluteString]
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = logHandle
         process.standardError = logHandle
@@ -69,7 +69,7 @@ enum EngineProcessController {
         try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
         let lease = try EngineProcessLease(lockFileURL: lockFileURL)
         guard let state = try loadState() else { return lease }
-        if isRecordedProcess(state) {
+        if isRunning(state) {
             throw NSError(
                 domain: "deskloop",
                 code: 5,
@@ -84,7 +84,7 @@ enum EngineProcessController {
         guard let state = try loadState() else {
             return (false, "No running live wallpaper engine recorded.")
         }
-        guard isRecordedProcess(state) else {
+        guard isRunning(state) else {
             try clearState(ownedBy: state.pid)
             return (false, "Cleaned up stale wallpaper process record (PID: \(state.pid)).")
         }
@@ -93,7 +93,7 @@ enum EngineProcessController {
         }
         for _ in 0..<20 {
             usleep(100_000)
-            guard isRecordedProcess(state) else {
+            guard isRunning(state) else {
                 try clearState(ownedBy: state.pid)
                 return (true, "Stopped live wallpaper engine (PID: \(state.pid)).")
             }
@@ -107,10 +107,6 @@ enum EngineProcessController {
     }
 
     static func isRunning(_ state: EngineState) -> Bool {
-        isRecordedProcess(state)
-    }
-
-    private static func isRecordedProcess(_ state: EngineState) -> Bool {
         guard state.pid > 0, kill(state.pid, 0) == 0,
               let executable = executablePath(pid: state.pid),
               executable == state.executablePath,

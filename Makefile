@@ -23,7 +23,7 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/deskloop
 
 clean:
-	rm -rf .build dist
+	rm -rf .build dist deskloop
 
 verify: setup
 	gitleaks detect --verbose

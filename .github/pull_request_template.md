@@ -6,7 +6,7 @@ Describe the problem and resulting behavior. Link the issue if applicable.
 
 - [ ] `make verify` passed, or failures and environment limitations are recorded below.
 - [ ] Tests cover changed behavior where applicable.
-- [ ] Help and documentation match any CLI or MCP changes.
+- [ ] Help and documentation match any CLI changes.
 
 For playback, power, privacy, or display changes, record the macOS version,
 display setup, and manual checks performed. For other changes, mark manual

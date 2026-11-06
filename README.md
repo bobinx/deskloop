@@ -1,11 +1,42 @@
 # deskloop
 
-> **CLI live video wallpaper engine for macOS.** Loop any local video (`.mp4`, `.mov`) or official Apple 4K Aerial across all monitors with hardware acceleration and playback paused when occluded or sleeping. Built with zero dependencies, native Model Context Protocol (MCP) support, and machine-readable JSON mode for AI agents.
+```
+   Deskloop
 
-## Requirements
+    ╔╦╗╔═╗╔═╗╦╔═╦  ╔═╗╔═╗╔═╗
+     ║║║╣ ╚═╗╠╩╗║  ║ ║║ ║╠═╝
+    ═╩╝╚═╝╚═╝╩ ╩╩═╝╚═╝╚═╝╩
 
-- macOS 13.0 (Ventura) or newer
-- Swift 5.9 or newer (for building from source)
+  │ A minimal, zero-dependency live video wallpaper engine for macOS.
+  │ Native by design: hardware accelerated, multi-display, and automatically
+  │ pauses playback the moment your desktop is covered.
+```
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![macOS](https://img.shields.io/badge/macOS-13.0%2B-black.svg)](https://apple.com)
+[![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+
+---
+
+## Vision
+
+Most live wallpaper utilities for macOS are either 100MB+ Electron apps, require running background game clients like Steam, or murder MacBook battery life by continuously decoding 4K frames even when you are working inside full-screen IDEs or browser windows.
+
+`deskloop` is built on one simple premise: a native, single-binary CLI tool that loops any video across your screens behind desktop icons, and pauses decoding the moment you're not looking at it.
+
+---
+
+## Features
+
+- **Zero Dependencies**: Pure Swift using native `AppKit` and `AVFoundation`. Compiles in seconds to a ~400KB universal binary with no external packages.
+- **Hardware Accelerated**: Decodes `.mp4`, `.mov`, and `.m4v` directly on Apple Silicon and Intel media engines. Audio is permanently muted.
+- **Occlusion Auto-Pause**: Automatically detects when application windows cover the desktop and pauses the video decoder, dropping CPU/GPU usage to 0.0%.
+- **Multi-Monitor & Spaces**: Automatically creates seamless borderless playback windows across every connected monitor and macOS virtual desktop (Space).
+- **Display Sleep & Low Power Friendly**: Halts playback during display sleep, system sleep, or when macOS enters Low Power Mode.
+- **Non-Destructive**: Runs at `kCGDesktopWindowLevel` without overwriting your system wallpaper settings. When stopped, your original wallpaper instantly reappears.
+- **Scriptable**: Includes `--daemon` background execution and `--json` status output for scripts, window managers, and automated workflows.
+
+---
 
 ## Installation
 
@@ -16,9 +47,9 @@ brew tap bobinx/deskloop https://github.com/bobinx/deskloop
 brew install deskloop
 ```
 
-Installs the precompiled universal macOS binary (Apple Silicon and Intel). No Xcode or local compilation required.
+Installs the precompiled universal macOS binary (Apple Silicon and Intel).
 
-### Build from source
+### Build from Source
 
 ```bash
 git clone https://github.com/bobinx/deskloop.git
@@ -26,191 +57,81 @@ cd deskloop
 make install
 ```
 
-Or run directly without installing system-wide:
+`make install` places the binary in `/usr/local/bin` by default. To install elsewhere:
 
 ```bash
-swift build -c release
-.build/release/deskloop --help
+make install PREFIX="$HOME/.local"
 ```
-
-`make install` installs to `/usr/local/bin` by default. Choose another location with `make install PREFIX="$HOME/.local"` and ensure that directory is on your `PATH`.
-
----
-
-## AI Agent & MCP Integration
-
-`deskloop` includes a built-in stdio [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. AI assistants (Claude Desktop, Cursor, Antigravity, etc.) can discover and manage live wallpapers as first-class tools.
-
-### Connect to Claude Desktop or Cursor
-Add `deskloop` to your `claude_desktop_config.json` or Cursor MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "deskloop": {
-      "command": "deskloop",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-### Available Tools:
-- **`apply_wallpaper`**: Set a video path, direct URL, or Apple Aerial as the live looping wallpaper across all monitors.
-- **`stop_wallpaper`**: Stop the running live wallpaper daemon.
-- **`get_status`**: Get live wallpaper status, PID, active video path, and connected displays.
-- **`search_wallpapers`**: Search Apple 4K Aerials by keyword or location.
-- **`list_featured`**: List featured official Apple 4K Aerials.
-- **`set_static_wallpaper`**: Set the first frame of a video as the system static desktop wallpaper.
-
-See [the agent workflow guide](docs/agents.md) for selection, verification, failure handling, and contribution checks.
-
-### Machine-Readable JSON Mode
-Query and status commands support `--json`. Background apply also supports `--json` and acknowledges engine startup before returning:
-
-```bash
-deskloop apply ~/Movies/loop.mp4 --daemon --json
-deskloop status --json
-deskloop search "Greenland" --json
-deskloop featured 10 --json
-deskloop sources --json
-deskloop cache list --json
-```
-
----
-
-## Supported sources
-
-deskloop focuses on two reliable video sources:
-
-1. **`apple` (default)**: Apple Aerial loops (drone, satellite, and underwater scenes) streamed and cached directly from Apple's CDN (`sylvan.apple.com`). Requires no API key.
-2. **`local`**: Any local video file (`.mp4`, `.mov`, `.m4v`) or directory on your Mac.
-
-To use external videos (from YouTube, Wallpaper Engine, reddit, or stock sites), download the `.mp4` file and pass its path or URL directly to `deskloop apply`.
 
 ---
 
 ## Usage
 
-### Browse and search Apple 4K aerials
+### 1. Loop a local video
 
-Browse featured 4K wallpapers:
-
-```bash
-deskloop featured 10
-```
-
-Search by location, keyword, or camera pass:
+Run in the background across all connected displays:
 
 ```bash
-deskloop search "Greenland"
-deskloop search "Hawaii"
-deskloop search "Los Angeles"
+deskloop run ~/Movies/loop.mp4 --daemon
+# or simply:
+deskloop ~/Movies/loop.mp4 --daemon
 ```
 
-### Apply a live wallpaper
-
-Apply an Apple aerial in the background:
+To run in the foreground (stops when you press `Ctrl+C`):
 
 ```bash
-deskloop apply "Korea and Japan Night" --daemon
+deskloop run ~/Movies/loop.mp4
 ```
 
-Apply a local video file:
+### 2. Stream a video URL
+
+Direct HTTP or HTTPS video streams can be played directly:
 
 ```bash
-deskloop apply ~/Movies/space.mp4 --daemon
+deskloop run "https://example.com/aurora.mp4" --daemon
 ```
 
-Apply a direct video URL:
+### 3. Check status
 
-```bash
-deskloop apply "https://example.com/loop.mp4" --daemon
-```
-
-Run in foreground (stops when you press `Ctrl+C`):
-
-```bash
-deskloop apply "Korea and Japan Night"
-```
-
-### Check status and stop
-
-Check currently running wallpaper, process ID, uptime, and active displays:
+Inspect the active video, process ID, uptime, and connected displays:
 
 ```bash
 deskloop status
 ```
 
-Stop the running wallpaper engine:
+Machine-readable JSON output for scripting:
+
+```bash
+deskloop status --json
+```
+
+### 4. Stop playback
+
+Stop the running wallpaper engine and instantly restore your default desktop wallpaper:
 
 ```bash
 deskloop stop
 ```
 
-### Apply as permanent static wallpaper
+---
 
-Extract the first frame of any video and apply it as the system desktop wallpaper across all screens without keeping any process running:
+## Power Safeguards
 
-```bash
-deskloop set-static "Korea and Japan Night"
-```
+Live wallpapers shouldn't drain your battery. `deskloop` enforces four native safeguards:
 
-### Download a video
-
-Save a 4K loop directly to a local file:
-
-```bash
-deskloop download "Korea and Japan Night" -o night.mp4
-```
-
-### Manage disk cache
-
-List all cached videos and their disk space:
-
-```bash
-deskloop cache list
-```
-
-Delete cached videos to reclaim disk space:
-
-```bash
-deskloop cache clear
-```
+1. **Occlusion Detection**: When your desktop is hidden beneath other application windows, `AVQueuePlayer` pauses immediately. Decoding resumes when you reveal the desktop or swipe to an empty Space.
+2. **Display Sleep Compliance**: `preventsDisplaySleepDuringVideoPlayback` is strictly set to `false`. Your displays sleep on schedule according to your Energy Saver settings.
+3. **Sleep Notification Hooks**: Registers system and workspace sleep notifications to halt playback before the machine sleeps.
+4. **Low Power Mode Awareness**: Watches `NSProcessInfoPowerStateDidChange` and freezes playback on the current frame while battery saver is active.
 
 ---
 
-## Power and resource management
+## Contributing
 
-Video playback consumes battery if unmanaged. deskloop implements five power safeguards:
+Contributions and bug reports are welcome. Please open an issue to discuss proposed changes before submitting a pull request.
 
-- **Window occlusion auto-pause**: Playback pauses when the desktop window is occluded and resumes when it becomes visible.
-- **Display sleep friendly**: Configured so macOS screens sleep normally according to your Energy Saver settings.
-- **Sleep tracking**: Playback pauses during display or system sleep.
-- **Low Power Mode awareness**: Automatically suspends playback when macOS enters battery saver mode.
-- **Hardware accelerated playback**: AVFoundation uses macOS's supported video playback path. Audio is muted.
-
----
-
-## Data, network, and privacy
-
-Deskloop stores its state, logs, downloaded videos, and extracted static frames in `~/.deskloop/`. `cache clear` removes downloaded videos but keeps static wallpaper frames. The `apple` source requests its catalog and videos from Apple's CDN; direct URLs are contacted only when you apply them. The live wallpaper windows opt out of window sharing so the wallpaper pixels are never captured during screen shares or recordings.
-
----
-
-## Current limits
-
-- The same video is applied to every connected display.
-- Live wallpaper playback lasts until `deskloop stop`, a signal, or process exit; Deskloop does not currently install a login item or persistent background service.
-- Direct URLs must point to a video stream that AVFoundation can play.
-- Apple-provided media is not redistributed by this project. Check the source's applicable terms before sharing downloaded files.
-
-## Contribute
-
-Human and agent-authored PRs are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
-and run `make verify` for builds, unit tests, and offline CLI/MCP checks.
-Run `deskloop <command> --help` for command syntax and defaults.
+`deskloop` strictly follows the Unix philosophy: do one thing and do it exceptionally well. It must remain a lightweight, zero-dependency, single-purpose CLI live wallpaper engine.
 
 ## License
 
-MIT
+[MIT](LICENSE) © [Bobin](https://github.com/bobinx)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline CLI/MCP contract checks. Never changes the desktop or real user state."""
+"""Offline CLI contract checks. Never changes the desktop or real user state."""
 import fcntl
 import json
 import os
@@ -18,71 +18,60 @@ with tempfile.TemporaryDirectory(prefix='deskloop-verify-') as directory:
         assert result.returncode == code, (args, result)
         return result
 
+    # 1. Help verification
     help_text = run('--help').stdout
     assert '\x1b' not in help_text
     assert run('help').stdout == help_text
+    assert run('-h').stdout == help_text
     assert run().stdout == help_text
-    assert run('live', '--help').stdout == run('apply', '--help').stdout
-    for command in ['apply', 'status', 'stop', 'featured', 'search', 'download',
-                    'set-static', 'sources', 'cache', 'mcp', 'version']:
-        assert 'Usage: deskloop ' + command in run(command, '--help').stdout
-        assert run('help', command).stdout == run(command, '--help').stdout
-    assert json.loads(run('--version', '--json').stdout)['version']
-    assert len(json.loads(run('sources', '--json').stdout)['sources']) == 2
-    assert json.loads(run('status', '--json').stdout)['status'] == 'stopped'
-    assert json.loads(run('cache', 'list', '--json').stdout)['totalBytes'] == 0
-    for args in [('featured', '0'), ('unknown',), ('download', 'id'), ('apply', 'id')]:
-        result = run(*args, '--json', code=1)
-        assert json.loads(result.stdout)['error']['message']
-        assert not result.stderr
-    error = run('unknown', code=1)
-    assert not error.stdout and 'deskloop:' in error.stderr
+    assert 'Usage: deskloop run' in run('run', '--help').stdout
+    assert 'Usage: deskloop run' in run('apply', '--help').stdout
+    assert 'Usage: deskloop status' in run('status', '--help').stdout
+    assert 'Usage: deskloop stop' in run('stop', '--help').stdout
+    assert 'Usage: deskloop version' in run('version', '--help').stdout
 
-    def mcp(messages):
-        result = subprocess.run([binary, 'mcp'], env=env,
-                                input='\n'.join(json.dumps(x) if not isinstance(x, str) else x for x in messages)+'\n',
-                                capture_output=True, text=True, timeout=15)
-        assert result.returncode == 0, result
-        return [json.loads(line) for line in result.stdout.splitlines()]
+    # 2. Version verification
+    version_data = json.loads(run('--version', '--json').stdout)
+    assert version_data['name'] == 'deskloop'
+    assert version_data['version']
+    assert run('version').stdout.strip().startswith('deskloop version')
 
-    def call(name, arguments):
-        return {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
-                'params': {'name': name, 'arguments': arguments}}
+    # 3. Status when stopped
+    status_data = json.loads(run('status', '--json').stdout)
+    assert status_data['status'] == 'stopped'
+    assert 'Stopped' in run('status').stdout
 
-    discovery = mcp([{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize'},
-                     {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
-                     {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}])
-    assert discovery[0]['result']['serverInfo']['name'] == 'deskloop'
-    tools = {tool['name']: tool for tool in discovery[1]['result']['tools']}
-    assert len(tools) == 6
-    assert tools['list_featured']['inputSchema']['properties']['limit']['minimum'] == 1
-    assert mcp([call('unknown_tool', {})])[0]['result']['isError']
-    responses = mcp(['{bad', {'jsonrpc': '2.0', 'id': 2, 'method': 'ping'}])
-    assert responses[0]['error']['code'] == -32700
-    assert responses[1]['id'] == 2
-    catalog = Path(directory, 'cache', 'apple_entries.json')
-    catalog.parent.mkdir(exist_ok=True)
-    catalog.write_text(json.dumps({'assets': [
-        {'id': 'fixture-id', 'accessibilityLabel': 'Fixture Greenland',
-         'url-4K-SDR': 'https://example.invalid/fixture.mov'}]}))
-    assert json.loads(run('search', 'Greenland', '--json').stdout)[0]['id'] == 'fixture-id'
-    assert len(json.loads(run('featured', '1', '--json').stdout)) == 1
-    for tool in ['list_featured', 'search_wallpapers']:
-        assert not mcp([call(tool, {'query': 'Greenland', 'limit': 1})])[0]['result']['isError']
-        for limit in [-1, 0, 101, True, 1.5, '10']:
-            response = mcp([call(tool, {'query': 'test', 'limit': limit})])[0]
-            assert response['result']['isError'], (tool, limit, response)
-    Path(directory, 'live.json').write_text('{corrupt')
-    assert mcp([call('get_status', {})])[0]['result']['isError']
-    assert json.loads(run('status', '--json', code=1).stdout)['error']
-    Path(directory, 'live.json').unlink()
+    # 4. Stop when already stopped (successful no-op)
+    stop_data = json.loads(run('stop', '--json').stdout)
+    assert stop_data['success'] is False
+    assert 'No running live wallpaper engine recorded' in stop_data['message']
 
-    # Hold the same lease as a running engine. The child must fail before creating windows.
+    # 5. Missing / invalid video file validation
+    nonexistent = str(Path(directory, 'nonexistent.mp4'))
+    json_err = json.loads(run('run', nonexistent, '--daemon', '--json', code=1).stdout)
+    assert 'Video file not found' in json_err['error']['message']
+
+    # Plain text error to stderr
+    plain_err = run('run', nonexistent, code=1)
+    assert not plain_err.stdout
+    assert 'Video file not found' in plain_err.stderr
+
+    # Unsupported format
+    text_file = str(Path(directory, 'file.txt'))
+    Path(text_file).touch()
+    fmt_err = json.loads(run('run', text_file, '--daemon', '--json', code=1).stdout)
+    assert 'Unsupported video format' in fmt_err['error']['message']
+
+    # 6. Unknown command handling
+    unknown_err = run('unknown_subcommand', code=1)
+    assert 'Unknown command' in unknown_err.stderr
+
+    # 7. Engine lock test (simulates already running engine)
     with open(Path(directory, 'engine.lock'), 'w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        video = Path(directory, 'fixture.mp4')
+        video = Path(directory, 'test.mp4')
         video.touch()
-        assert json.loads(run('apply', str(video), '--daemon', '--json', code=1).stdout)['error']
-        assert mcp([call('apply_wallpaper', {'target': str(video)})])[0]['result']['isError']
+        lock_err = json.loads(run('run', str(video), '--daemon', '--json', code=1).stdout)
+        assert 'already running' in lock_err['error']['message']
 
-print('CLI/MCP contract checks passed (offline, isolated state, no desktop changes).')
+print('All CLI contract checks passed (offline, isolated state, zero desktop changes).')

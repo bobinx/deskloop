@@ -38,7 +38,7 @@ jobs:
           Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(match.group(1).strip() + "\n")
           PYTHON
 
-      - name: Verify builds and CLI/MCP contracts
+      - name: Verify builds and CLI contracts
         run: make verify
 
       - name: Build arm64

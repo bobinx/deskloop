@@ -26,19 +26,20 @@ final class VideoPlayerHostView: NSView {
     }
 }
 
+@MainActor
 public final class WallpaperEngine: NSObject {
     public static let shared = WallpaperEngine()
 
+    @MainActor
     private final class ScreenEntry {
-        let displayID: CGDirectDisplayID
         let window: NSWindow
         let player: AVQueuePlayer
         let looper: AVPlayerLooper
         var occlusionObserver: NSObjectProtocol?
         var isOccluded: Bool = false
+        var failureObservation: PlaybackFailureObservation?
 
-        init(displayID: CGDirectDisplayID, window: NSWindow, player: AVQueuePlayer, looper: AVPlayerLooper) {
-            self.displayID = displayID
+        init(window: NSWindow, player: AVQueuePlayer, looper: AVPlayerLooper) {
             self.window = window
             self.player = player
             self.looper = looper
@@ -50,9 +51,7 @@ public final class WallpaperEngine: NSObject {
     private var systemObservers: [NSObjectProtocol] = []
     private var workspaceObservers: [NSObjectProtocol] = []
 
-    // Power management state
-    private var isPowerSuspended: Bool = false
-    private var isSystemSleeping: Bool = false
+    private var suspensionReasons: PlaybackSuspensionReasons = []
 
     public func start(with url: URL) {
         self.videoURL = url
@@ -70,13 +69,14 @@ public final class WallpaperEngine: NSObject {
 
         let ws = NSWorkspace.shared.notificationCenter
 
-        // 1. Display and system sleep observers
         workspaceObservers.append(ws.addObserver(
             forName: NSWorkspace.screensDidSleepNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.setSystemSleeping(true)
+            MainActor.assumeIsolated {
+                self?.setSuspended(.displaySleep, true)
+            }
         })
 
         workspaceObservers.append(ws.addObserver(
@@ -84,7 +84,9 @@ public final class WallpaperEngine: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.setSystemSleeping(false)
+            MainActor.assumeIsolated {
+                self?.setSuspended(.displaySleep, false)
+            }
         })
 
         workspaceObservers.append(ws.addObserver(
@@ -92,7 +94,9 @@ public final class WallpaperEngine: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.setSystemSleeping(true)
+            MainActor.assumeIsolated {
+                self?.setSuspended(.systemSleep, true)
+            }
         })
 
         workspaceObservers.append(ws.addObserver(
@@ -100,25 +104,29 @@ public final class WallpaperEngine: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.setSystemSleeping(false)
+            MainActor.assumeIsolated {
+                self?.setSuspended(.systemSleep, false)
+            }
         })
 
-        // 2. Low power mode observer
         systemObservers.append(NotificationCenter.default.addObserver(
             forName: NSNotification.Name.NSProcessInfoPowerStateDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.checkLowPowerMode()
+            MainActor.assumeIsolated {
+                self?.checkLowPowerMode()
+            }
         })
 
-        // 3. Screen layout and resolution change observer
         systemObservers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.setupWindows()
+            MainActor.assumeIsolated {
+                self?.setupWindows()
+            }
         })
 
         checkLowPowerMode()
@@ -126,18 +134,17 @@ public final class WallpaperEngine: NSObject {
 
     private func checkLowPowerMode() {
         let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        self.isPowerSuspended = isLowPower
-        updatePlaybackState()
+        setSuspended(.lowPowerMode, isLowPower)
     }
 
-    private func setSystemSleeping(_ sleeping: Bool) {
-        self.isSystemSleeping = sleeping
+    private func setSuspended(_ reason: PlaybackSuspensionReasons, _ suspended: Bool) {
+        suspensionReasons.set(reason, suspended: suspended)
         updatePlaybackState()
     }
 
     private func updatePlaybackState() {
         for entry in entries {
-            if isSystemSleeping || isPowerSuspended || entry.isOccluded {
+            if suspensionReasons.shouldPause(isOccluded: entry.isOccluded) {
                 entry.player.pause()
             } else {
                 entry.player.play()
@@ -180,25 +187,28 @@ public final class WallpaperEngine: NSObject {
 
             let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
             let entry = ScreenEntry(
-                displayID: screenID,
                 window: window,
                 player: queuePlayer,
                 looper: looper
             )
 
-            // Per-window occlusion observer (properly removed during tearDownWindows)
             entry.occlusionObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didChangeOcclusionStateNotification,
                 object: window,
                 queue: .main
             ) { [weak self, weak entry, weak window] _ in
-                guard let self = self, let entry = entry, let win = window else { return }
-                let isVisible = win.occlusionState.contains(.visible)
-                entry.isOccluded = !isVisible
-                self.updatePlaybackState()
+                MainActor.assumeIsolated {
+                    guard let self = self, let entry = entry, let win = window else { return }
+                    let isVisible = win.occlusionState.contains(.visible)
+                    entry.isOccluded = !isVisible
+                    self.updatePlaybackState()
+                }
             }
 
             entries.append(entry)
+            entry.failureObservation = PlaybackFailureObservation(
+                player: queuePlayer, looper: looper, displayID: screenID, videoURL: videoURL
+            )
 
             window.orderFrontRegardless()
         }
@@ -211,10 +221,14 @@ public final class WallpaperEngine: NSObject {
         systemObservers.removeAll()
         workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         workspaceObservers.removeAll()
+        suspensionReasons = []
+        videoURL = nil
     }
 
     private func tearDownWindows() {
         for entry in entries {
+            entry.failureObservation?.invalidate()
+            entry.failureObservation = nil
             if let obs = entry.occlusionObserver {
                 NotificationCenter.default.removeObserver(obs)
                 entry.occlusionObserver = nil
@@ -224,4 +238,60 @@ public final class WallpaperEngine: NSObject {
         }
         entries.removeAll()
     }
+}
+
+@MainActor
+final class PlaybackFailureObservation {
+    private var observers: [NSKeyValueObservation] = []
+    private var itemObserver: NSKeyValueObservation?
+    private var isActive = true
+
+    init(
+        player: AVQueuePlayer,
+        looper: AVPlayerLooper,
+        displayID: CGDirectDisplayID,
+        videoURL: URL,
+        report: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data($0.utf8)) }
+    ) {
+        observers.append(player.observe(\.status, options: [.initial, .new]) { player, _ in
+            guard player.status == .failed else { return }
+            Self.reportFailure("player", error: player.error, displayID: displayID, videoURL: videoURL, report: report)
+        })
+        observers.append(looper.observe(\.status, options: [.initial, .new]) { looper, _ in
+            guard looper.status == .failed else { return }
+            Self.reportFailure("looper", error: looper.error, displayID: displayID, videoURL: videoURL, report: report)
+        })
+        observers.append(player.observe(\.currentItem, options: [.initial, .new]) { [weak self] player, _ in
+            let currentItem = player.currentItem
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.isActive else { return }
+                self.itemObserver?.invalidate()
+                self.itemObserver = currentItem?.observe(\.status, options: [.initial, .new]) { item, _ in
+                    guard item.status == .failed else { return }
+                    Self.reportFailure("item", error: item.error, displayID: displayID, videoURL: videoURL, report: report)
+                }
+            }
+        })
+    }
+
+    func invalidate() {
+        isActive = false
+        observers.forEach { $0.invalidate() }
+        observers.removeAll()
+        itemObserver?.invalidate()
+        itemObserver = nil
+    }
+
+    nonisolated private static func reportFailure(
+        _ component: String,
+        error: Error?,
+        displayID: CGDirectDisplayID,
+        videoURL: URL,
+        report: @Sendable (String) -> Void
+    ) {
+        let detail = error.map { String(describing: $0) } ?? "Unknown playback error"
+        let message = "deskloop: \(component) failed on display \(displayID), video \(videoURL.absoluteString): \(detail)\n"
+        report(message)
+    }
+
 }
