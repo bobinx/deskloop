@@ -2,12 +2,11 @@ import AppKit
 import AVFoundation
 
 final class VideoPlayerHostView: NSView {
-    let playerLayer: AVPlayerLayer
+    private let playerLayer: AVPlayerLayer
 
     init(player: AVPlayer, frame: NSRect) {
         self.playerLayer = AVPlayerLayer(player: player)
         self.playerLayer.videoGravity = .resizeAspectFill
-        self.playerLayer.frame = NSRect(origin: .zero, size: frame.size)
         super.init(frame: frame)
         self.wantsLayer = true
     }
@@ -27,7 +26,7 @@ final class VideoPlayerHostView: NSView {
 }
 
 @MainActor
-public final class WallpaperEngine: NSObject {
+public final class WallpaperEngine {
     public static let shared = WallpaperEngine()
 
     @MainActor
@@ -62,10 +61,7 @@ public final class WallpaperEngine: NSObject {
     }
 
     private func setupPowerAndSystemObservers() {
-        systemObservers.forEach { NotificationCenter.default.removeObserver($0) }
-        systemObservers.removeAll()
-        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
-        workspaceObservers.removeAll()
+        clearObservers()
 
         let ws = NSWorkspace.shared.notificationCenter
 
@@ -196,10 +192,10 @@ public final class WallpaperEngine: NSObject {
                 forName: NSWindow.didChangeOcclusionStateNotification,
                 object: window,
                 queue: .main
-            ) { [weak self, weak entry, weak window] _ in
+            ) { [weak self, weak entry] _ in
                 MainActor.assumeIsolated {
-                    guard let self = self, let entry = entry, let win = window else { return }
-                    let isVisible = win.occlusionState.contains(.visible)
+                    guard let self, let entry else { return }
+                    let isVisible = entry.window.occlusionState.contains(.visible)
                     entry.isOccluded = !isVisible
                     self.updatePlaybackState()
                 }
@@ -217,12 +213,16 @@ public final class WallpaperEngine: NSObject {
 
     public func stop() {
         tearDownWindows()
+        clearObservers()
+        suspensionReasons = []
+        videoURL = nil
+    }
+
+    private func clearObservers() {
         systemObservers.forEach { NotificationCenter.default.removeObserver($0) }
         systemObservers.removeAll()
         workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         workspaceObservers.removeAll()
-        suspensionReasons = []
-        videoURL = nil
     }
 
     private func tearDownWindows() {

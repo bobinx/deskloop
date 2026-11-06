@@ -123,8 +123,18 @@ jobs:
 
           branch=automation/homebrew-release
           git checkout -B "$branch" origin/main
-          python3 Scripts/update-homebrew-formula.py \
-            Formula/deskloop.rb "$version" "$binary_url" "$binary_sha256"
+          python3 - <<'PYTHON'
+          import os, re
+          from pathlib import Path
+
+          formula = Path("Formula/deskloop.rb")
+          content = formula.read_text()
+          url = os.environ["binary_url"]
+          sha = os.environ["binary_sha256"]
+          content = re.sub(r'^  url ".*"$', f'  url "{url}"', content, count=1, flags=re.M)
+          content = re.sub(r'^  sha256 ".*"$', f'  sha256 "{sha}"', content, count=1, flags=re.M)
+          formula.write_text(content)
+          PYTHON
 
           git diff --check
           git add Formula/deskloop.rb

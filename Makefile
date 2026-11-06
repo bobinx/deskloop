@@ -1,18 +1,14 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 
-.PHONY: all build test install uninstall clean verify setup
+.PHONY: all build test install uninstall clean verify
 
 all: build
 
-setup:
-	@pre-commit install --allow-missing-config -q 2>/dev/null || true
-	@pre-commit install --hook-type pre-push --allow-missing-config -q 2>/dev/null || true
-
-build: setup
+build:
 	swift build -c release
 
-test: setup
+test:
 	swift test
 
 install: build
@@ -25,8 +21,7 @@ uninstall:
 clean:
 	rm -rf .build dist deskloop
 
-verify: setup
-	gitleaks detect --verbose
+verify:
 	swift test
 	swift build
 	swift build -c release

@@ -3,14 +3,13 @@ import Foundation
 enum CLIHelp {
     static let commands: [String: String] = [
         "run": "run <path|url> [--daemon] [--json]\n    Loop a video on all displays. Foreground playback ends on Ctrl+C.\n    Use --daemon for background playback. --json requires --daemon.\n    Stop an existing engine before starting another video.",
-        "apply": "apply <path|url> [--daemon] [--json]\n    Alias for 'run'.",
         "status": "status [--json]\n    Show running wallpaper process status, active displays, and uptime.",
         "stop": "stop [--json]\n    Stop the running wallpaper engine.",
         "version": "version [--json]\n    Show installed version. Aliases: --version, -v."
     ]
 
     static func text(for command: String?) -> String {
-        let topic = command.map { ["live": "run", "apply": "run"][$0] ?? $0 }
+        let topic = command.map { $0 == "apply" ? "run" : $0 }
         if let topic, let detail = commands[topic] {
             return "Usage: deskloop \(detail)\n\nRun 'deskloop --help' for general usage."
         }

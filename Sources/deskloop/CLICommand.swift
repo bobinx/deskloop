@@ -1,6 +1,6 @@
 import Foundation
 
-enum CLICommand: Equatable {
+enum CLICommand {
     case run(target: String, daemon: Bool, json: Bool)
     case status(json: Bool)
     case stop(json: Bool)
@@ -12,7 +12,7 @@ enum CLICommandParser {
     static func parse(_ arguments: [String]) throws -> CLICommand {
         guard !arguments.isEmpty else { return .help(command: nil) }
 
-        let (tokens, isDaemon, isJSON) = try extractOptions(from: arguments)
+        let (tokens, isDaemon, isJSON) = extractOptions(from: arguments)
         guard let first = tokens.first else {
             if isJSON {
                 throw usage("deskloop <command> [--json]")
@@ -51,7 +51,7 @@ enum CLICommandParser {
             }
             return .stop(json: isJSON)
 
-        case "run", "apply", "live":
+        case "run", "apply":
             guard let target = values.first, values.count == 1 else {
                 throw usage("deskloop run <path|url> [--daemon] [--json]")
             }
@@ -82,7 +82,7 @@ enum CLICommandParser {
         }
     }
 
-    private static func extractOptions(from arguments: [String]) throws -> (tokens: [String], isDaemon: Bool, isJSON: Bool) {
+    private static func extractOptions(from arguments: [String]) -> (tokens: [String], isDaemon: Bool, isJSON: Bool) {
         var tokens: [String] = []
         var isDaemon = false
         var isJSON = false

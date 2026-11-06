@@ -1,18 +1,16 @@
-import Darwin
-import Dispatch
 import Foundation
 import DeskloopCore
 
 enum EngineProcessController {
-    static let appDirectory = DeskloopPaths.dataDirectory
-
-    static let stateFileURL = appDirectory.appendingPathComponent("live.json")
+    private static let appDirectory = DeskloopPaths.dataDirectory
+    private static let stateFileURL = appDirectory.appendingPathComponent("live.json")
     static let logFileURL = appDirectory.appendingPathComponent("live.log")
     private static let lockFileURL = appDirectory.appendingPathComponent("engine.lock")
 
     static func startDaemon(videoURL: URL) throws -> EngineState {
         try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
-        let logHandle = try FileHandle(forWritingTo: createLogFile())
+        try ensureLogFileExists()
+        let logHandle = try FileHandle(forWritingTo: logFileURL)
         defer { try? logHandle.close() }
         try logHandle.seekToEnd()
         let process = Process()
@@ -38,11 +36,10 @@ enum EngineProcessController {
             "Wallpaper engine did not acknowledge startup. Check \(logFileURL.path). If an engine is already running, stop it before applying another wallpaper."])
     }
 
-    private static func createLogFile() throws -> URL {
+    private static func ensureLogFileExists() throws {
         if !FileManager.default.fileExists(atPath: logFileURL.path) {
             try Data().write(to: logFileURL)
         }
-        return logFileURL
     }
 
     static func saveState(videoURL: URL) throws {

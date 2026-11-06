@@ -7,24 +7,20 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "deskloop", targets: ["deskloop"]),
-        .library(name: "DeskloopCore", targets: ["DeskloopCore"])
+        .executable(name: "deskloop", targets: ["deskloop"])
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "DeskloopCore",
-            path: "Sources/DeskloopCore"
+            name: "DeskloopCore"
         ),
         .executableTarget(
             name: "deskloop",
-            dependencies: ["DeskloopCore"],
-            path: "Sources/deskloop"
+            dependencies: ["DeskloopCore"]
         ),
         .testTarget(
             name: "DeskloopTests",
-            dependencies: ["DeskloopCore"],
-            path: "Tests/DeskloopTests"
+            dependencies: ["DeskloopCore"]
         )
     ]
 )

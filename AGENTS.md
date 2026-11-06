@@ -44,7 +44,7 @@ When making code changes, agents must preserve the following power management an
 
 ## 3. Build & Test Commands
 
-Run `make verify` before declaring code changes complete. It runs unit tests, debug/release builds, secret scanning with gitleaks, and offline CLI contract checks:
+Run `make verify` before declaring code changes complete. It runs unit tests, debug/release builds, and offline CLI contract checks:
 
 ```bash
 # Run unit tests
