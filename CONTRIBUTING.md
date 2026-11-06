@@ -1,8 +1,6 @@
-# Contributing to deskloop
+# Contributing
 
-Thank you for your interest in contributing to deskloop.
-
-## Development setup
+## Setup
 
 ### Prerequisites
 
@@ -25,24 +23,20 @@ make verify
 
 ## Project architecture
 
-The repository is structured into two targets:
-
-- `Sources/DeskloopCore/`: Core library containing playback engine (`WallpaperEngine`), display management, power suspension hooks (`PlaybackSuspensionReasons`), and paths (`DeskloopPaths`).
-- `Sources/deskloop/`: Thin command-line interface executable that handles argument parsing, terminal output, and process daemonization.
+- `Sources/DeskloopCore/`: Core library containing the playback engine (`WallpaperEngine`), display management, power suspension hooks (`PlaybackSuspensionReasons`), and paths (`DeskloopPaths`).
+- `Sources/deskloop/`: Thin CLI executable handling argument parsing, terminal output, and process daemonization.
 - `Tests/DeskloopTests/`: Unit tests for engine state serialization, sandbox paths, and power suspension states.
 
-## Human and AI-authored contributions
+## Guidelines
 
-Both human-crafted and AI-assisted contributions are welcome, provided they meet our quality bar:
-
-- **Verification over self-reporting**: Run `make verify` for code changes. For playback, power, privacy, or display changes, also test the affected behavior in a graphical macOS session.
-- **Maintain power invariants**: Never disable occlusion detection or sleep tracking. `preventsDisplaySleepDuringVideoPlayback` must remain `false`.
-- **Zero third-party dependencies**: Do not introduce CocoaPods, Carthage, or third-party SwiftPM dependencies. Keep the binary lightweight and self-contained.
-- **Clean diffs**: Avoid stylistic churn, unsolicited reformatting, or extraneous comments. Keep changes focused.
+- **Verification.** Run `make verify` for code changes. For playback, power, privacy, or display changes, test in a real graphical macOS session.
+- **Power invariants.** Never disable occlusion detection or sleep tracking. `preventsDisplaySleepDuringVideoPlayback` must stay `false`.
+- **Zero dependencies.** Do not add CocoaPods, Carthage, or third-party SwiftPM packages. Keep the binary self-contained.
+- **Clean diffs.** Avoid stylistic churn or unsolicited reformatting. Keep changes focused.
 
 ## Automated checks
 
-CI runs secret scanning (`gitleaks`), unit tests, debug/release builds, and CLI contract tests automatically on every pull request and push to `main`.
+CI runs secret scanning (`gitleaks`), unit tests, debug and release builds, and CLI contract tests automatically on pull requests and pushes to `main`.
 
 ## Pull request checklist
 
@@ -52,5 +46,4 @@ CI runs secret scanning (`gitleaks`), unit tests, debug/release builds, and CLI 
 
 ## Review and compatibility
 
-Please open an issue before proposing architectural changes.
-Keep pull requests focused and explain the macOS versions and display configurations used for manual testing. We support macOS 13 and newer; changes to playback, sleep, or display handling need manual verification.
+Open an issue before proposing architectural changes. Explain the macOS versions and display setups used for testing. Changes to playback, sleep, or display handling require manual verification on hardware.

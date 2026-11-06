@@ -18,7 +18,7 @@
 
 ---
 
-## Get Started
+## Getting started
 
 ### 1. Install
 
@@ -59,18 +59,18 @@ deskloop "https://example.com/loop.mp4" --daemon
 
 ---
 
-## Why I Built This
+## Why I built this
 
-I wanted looping video wallpapers on my Mac, but the existing options bugged me:
-- Heavy GUI apps that take 100MB+ of memory just to loop an MP4.
+I wanted looping video wallpapers on my Mac, but the existing tools bugged me:
+- Heavy GUI apps that burn 100MB+ of memory to loop an MP4.
 - Running Steam in the background just for Wallpaper Engine.
-- Battery drain: most tools keep decoding video at full tilt even when you're working inside a full-screen browser or code editor.
+- Battery drain. Most tools keep decoding frames at full speed even when you are buried in a full-screen editor.
 
-`deskloop` is a lightweight native CLI utility that solves this:
-1. **Zero CPU when covered**: macOS notifies `deskloop` when application windows obscure the desktop, and the video decoder pauses immediately.
-2. **Zero dependencies**: Written purely in Swift with native AppKit and AVFoundation. Compiles to a single ~400KB binary.
-3. **Safe**: Sits behind your desktop icons (`kCGDesktopWindowLevel`) without modifying your system wallpaper settings. When you stop it, your desktop goes right back to how you left it.
-4. **Sleep & battery friendly**: Never blocks display sleep, pauses when screens sleep, and freezes on the current frame during Low Power Mode.
+deskloop fixes that by doing less:
+1. **Zero CPU when covered.** macOS notifies deskloop when windows cover the desktop, and the video decoder pauses immediately.
+2. **Zero dependencies.** Written in Swift with native AppKit and AVFoundation. Compiles to a single ~400KB binary.
+3. **Safe.** Runs behind desktop icons (`kCGDesktopWindowLevel`) without touching system wallpaper settings. Stop it and your desktop returns to how you left it.
+4. **Sleep friendly.** Never blocks display sleep, pauses when screens sleep, and freezes on the current frame during Low Power Mode.
 
 ---
 
@@ -89,9 +89,9 @@ I wanted looping video wallpapers on my Mac, but the existing options bugged me:
 
 ## Contributing
 
-Contributions and bug reports are welcome. Please open an issue to discuss proposed changes before opening a pull request.
+Contributions and bug reports are welcome. Open an issue to discuss proposed changes before opening a pull request.
 
-`deskloop` strictly follows the Unix philosophy: do one thing and do it well. It must stay lightweight, zero-dependency, and battery-friendly.
+deskloop follows the Unix philosophy: do one thing and do it well. It must stay lightweight, zero-dependency, and battery-friendly.
 
 ## License
 

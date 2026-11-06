@@ -1,16 +1,16 @@
 ---
 name: Feature Request
-about: Suggest an idea or enhancement for deskloop
+about: Suggest an improvement for deskloop
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is.
+**Problem**
+What problem are you trying to solve?
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**Proposed solution**
+What should deskloop do instead?
 
 **Additional context**
-Add any other context, screenshots, or examples here.
+Screenshots, examples, or extra details.
