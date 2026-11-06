@@ -7,7 +7,7 @@
      ║║║╣ ╚═╗╠╩╗║  ║ ║║ ║╠═╝
     ═╩╝╚═╝╚═╝╩ ╩╩═╝╚═╝╚═╝╩
 
-  │ Minimal, zero-dependency live video wallpaper for macOS.
+  │ Live video wallpaper for macOS.
   │ Native Swift, hardware accelerated, and automatically pauses
   │ the moment your desktop is covered.
 ```
@@ -29,7 +29,7 @@ brew tap bobinx/deskloop https://github.com/bobinx/deskloop
 brew install deskloop
 ```
 
-Or build from source in seconds (no external dependencies):
+Or build from source in seconds (no external packages needed):
 
 ```bash
 git clone https://github.com/bobinx/deskloop.git
@@ -67,8 +67,8 @@ I wanted looping video wallpapers on my Mac, but the existing tools bugged me:
 - Battery drain. Most tools keep decoding frames at full speed even when you are buried in a full-screen editor.
 
 deskloop fixes that by doing less:
-1. **Zero CPU when covered.** macOS notifies deskloop when windows cover the desktop, and the video decoder pauses immediately.
-2. **Zero dependencies.** Written in Swift with native AppKit and AVFoundation. Compiles to a single ~400KB binary.
+1. **Pauses when covered.** macOS notifies deskloop when windows cover the desktop, and the video decoder pauses immediately to save CPU and battery.
+2. **Self-contained.** Built directly on AppKit and AVFoundation. Compiles in seconds to a single ~400KB binary with no external packages.
 3. **Safe.** Runs behind desktop icons (`kCGDesktopWindowLevel`) without touching system wallpaper settings. Stop it and your desktop returns to how you left it.
 4. **Sleep friendly.** Never blocks display sleep, pauses when screens sleep, and freezes on the current frame during Low Power Mode.
 
@@ -91,7 +91,7 @@ deskloop fixes that by doing less:
 
 Contributions and bug reports are welcome. Open an issue to discuss proposed changes before opening a pull request.
 
-deskloop follows the Unix philosophy: do one thing and do it well. It must stay lightweight, zero-dependency, and battery-friendly.
+deskloop follows the Unix philosophy: do one thing and do it well. It must stay small, battery-friendly, and focused on its core job.
 
 ## License
 

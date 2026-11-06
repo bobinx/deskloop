@@ -1,5 +1,5 @@
 class Deskloop < Formula
-  desc "CLI live video wallpaper engine for macOS (battery-efficient, zero dependencies)"
+  desc "Battery-friendly live video wallpaper engine for macOS"
   homepage "https://github.com/bobinx/deskloop"
   url "https://github.com/bobinx/deskloop/releases/download/v1.2.0/deskloop-v1.2.0-macos-universal.tar.gz"
   sha256 "6d8e98baa562d9badde1c42c3b30535e027723e467cf2af07f37ecc144d34f1a"

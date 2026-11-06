@@ -31,7 +31,7 @@ make verify
 
 - **Verification.** Run `make verify` for code changes. For playback, power, privacy, or display changes, test in a real graphical macOS session.
 - **Power invariants.** Never disable occlusion detection or sleep tracking. `preventsDisplaySleepDuringVideoPlayback` must stay `false`.
-- **Zero dependencies.** Do not add CocoaPods, Carthage, or third-party SwiftPM packages. Keep the binary self-contained.
+- **No third-party packages.** Use native Apple frameworks only. Keep the binary self-contained without adding package dependencies.
 - **Clean diffs.** Avoid stylistic churn or unsolicited reformatting. Keep changes focused.
 
 ## Automated checks

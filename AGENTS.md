@@ -6,9 +6,9 @@ Guidelines for autonomous agents and tools working on this codebase.
 
 ## 1. Project overview
 
-`deskloop` is a lightweight, zero-dependency command-line live wallpaper engine for macOS 13.0+. It renders looping video on desktop windows behind macOS system UI, and pauses playback during occlusion, sleep, and Low Power Mode.
+`deskloop` is a native command-line live wallpaper engine for macOS 13.0+. It renders looping video on desktop windows behind macOS system UI, and pauses playback during occlusion, sleep, and Low Power Mode.
 
-- Zero third-party packages. Uses native Apple frameworks (`AppKit`, `AVFoundation`, `CoreGraphics`).
+- Native Apple frameworks. Built directly on `AppKit`, `AVFoundation`, and `CoreGraphics` with no external packages.
 - Core orchestration lives in `DeskloopCore`, CLI entrypoint in `Sources/deskloop/main.swift`.
 - Engine state, models, and power suspension reasons are tested in `Tests/DeskloopTests/`.
 

@@ -74,4 +74,4 @@ with tempfile.TemporaryDirectory(prefix='deskloop-verify-') as directory:
         lock_err = json.loads(run('run', str(video), '--daemon', '--json', code=1).stdout)
         assert 'already running' in lock_err['error']['message']
 
-print('All CLI contract checks passed (offline, isolated state, zero desktop changes).')
+print('All CLI contract checks passed (offline, isolated state, no desktop changes).')
